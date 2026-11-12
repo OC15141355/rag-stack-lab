@@ -71,7 +71,7 @@ LEARNING.md                    log of what clicked and what is still fuzzy
 | 3 | Dev loop | Dev containers (devcontainer.json, features, Podman as the engine); Tilt (Tiltfile, live update, building to Harbor, deploying to a dev namespace) | laptop + homelab |
 | 4 | Traefik | IngressRoute, middlewares, TLS, coexisting with the existing ingress controller | homelab |
 | 5 | Inference + Cline | NIM API via hosted endpoints; the uv inference service; running it from its repo (inside the dev container and under Tilt); configuring Cline to use it for agentic coding, including what the endpoint must support (OpenAI-compatible chat completions, streaming, context window) and how to diagnose it when Cline fails | laptop + homelab |
-| 6 | Gateway | Bifrost and the NIM proxy, contrasted with LiteLLM | homelab |
+| 6 | Gateway | The NIM proxy and the role of an LLM gateway, contrasted with LiteLLM. Bifrost is deferred: it is not in the target stack yet, and gets added here when it is | homelab |
 | 7 | Vector search | OpenSearch kNN and hybrid search; Elastic differences | homelab |
 | 8 | Graph | Neo4j, Cypher, graph-backed retrieval | homelab |
 | 9 | Ingestion | NV-Ingest and extraction | homelab |
@@ -86,7 +86,7 @@ LEARNING.md                    log of what clicked and what is still fuzzy
 1. Claude checks the component's current official documentation before writing
    anything. Component names, chart versions and config keys are taken from the
    docs, not from memory. This matters most for NeMo microservices, the NIM
-   proxy and Bifrost.
+   proxy.
 2. Claude writes the runbook and executes it on the homelab. A runbook is not
    done until every command in it has been run and every check in `CHECKS.md`
    has passed, including the negative probes.
@@ -118,7 +118,7 @@ Claude supplies only scaffolding unrelated to the concept being learned.
 - **Slice 1 (this spec's implementation plan)**: repo skeleton, module 0, and
   modules 1–6. Exit condition: Cline, on the laptop, completes an agentic
   coding task through the lab inference service, with the request travelling
-  Traefik → Bifrost → hosted NIM; a code change to the inference service
+  Traefik → inference service → hosted NIM; a code change to the inference service
   reaches the cluster through Tilt; and the learner has rebuilt modules 1–6
   from the runbooks.
 - **Slice 2**: modules 7–10 (data path and blueprint).
