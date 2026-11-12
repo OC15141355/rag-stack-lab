@@ -17,7 +17,8 @@ The repo is neutral: it contains no employer, customer, or project names.
 
 | Layer | Components |
 |---|---|
-| Platform | Kubernetes (Tanzu in the target environment, RKE2 in the lab), Volcano GPU scheduling, H100/H200-class GPUs, Harbor, Podman, dev containers |
+| Platform | Kubernetes (Tanzu in the target environment, RKE2 in the lab), Volcano GPU scheduling, H100/H200-class GPUs, Harbor, Podman |
+| Developer loop | Dev containers, Tilt, Cline against the inference service |
 | Edge / gateway | Traefik, Bifrost, NIM proxy |
 | Model serving | NVIDIA NIMs, NeMo microservices, a uv-run Python inference service consumed by Cline |
 | RAG data path | NV-Ingest / NeMo extraction, OpenSearch (Elastic as comparison), Neo4j |
@@ -32,7 +33,7 @@ The repo is neutral: it contains no employer, customer, or project names.
   with explicit resource requests and limits.
 - **GPU**: the only NVIDIA card is a GTX 1070 (8 GB). It cannot run LLM NIMs.
   At design time the node advertises 0 allocatable GPUs; fixing that is a
-  prerequisite of module 12, not of earlier modules.
+  prerequisite of module 13, not of earlier modules.
 - **Models**: all NIM calls in homelab modules go to NVIDIA's hosted endpoints,
   which expose the same API as self-hosted NIMs. This needs an NVIDIA developer
   account and API key, supplied by the learner and stored as a Kubernetes
@@ -65,19 +66,20 @@ LEARNING.md                    log of what clicked and what is still fuzzy
 | # | Module | Covers | Where |
 |---|---|---|---|
 | 0 | Map | Whole architecture, one request traced, glossary | docs |
-| 1 | Images | Podman, dev containers, Harbor, mirroring NGC images for a disconnected environment | homelab |
+| 1 | Images | Podman, Harbor, mirroring NGC images for a disconnected environment | homelab |
 | 2 | Platform | Kubernetes pieces the stack relies on; Tanzu differences (read-only) | homelab |
-| 3 | Traefik | IngressRoute, middlewares, TLS, coexisting with the existing ingress controller | homelab |
-| 4 | Inference | NIM API via hosted endpoints, uv inference service, Cline as a client | homelab |
-| 5 | Gateway | Bifrost and the NIM proxy, contrasted with LiteLLM | homelab |
-| 6 | Vector search | OpenSearch kNN and hybrid search; Elastic differences | homelab |
-| 7 | Graph | Neo4j, Cypher, graph-backed retrieval | homelab |
-| 8 | Ingestion | NV-Ingest and extraction | homelab |
-| 9 | RAG Blueprint | Assembling 4–8 as the blueprint does; NeMo Retriever and other NeMo microservices | homelab |
-| 10 | App | FastAPI backend, React/TS frontend | homelab |
-| 11 | OpenTelemetry | Traces and metrics across every hop into the existing Grafana stack | homelab |
-| 12 | Volcano | Queues, gang scheduling, on CPU then on the GTX 1070 | homelab |
-| 13 | GPU day | Self-hosted NIM, NIM Operator, Volcano with real GPU jobs | rented GPU |
+| 3 | Dev loop | Dev containers (devcontainer.json, features, Podman as the engine); Tilt (Tiltfile, live update, building to Harbor, deploying to a dev namespace) | laptop + homelab |
+| 4 | Traefik | IngressRoute, middlewares, TLS, coexisting with the existing ingress controller | homelab |
+| 5 | Inference + Cline | NIM API via hosted endpoints; the uv inference service; running it from its repo (inside the dev container and under Tilt); configuring Cline to use it for agentic coding, including what the endpoint must support (OpenAI-compatible chat completions, streaming, context window) and how to diagnose it when Cline fails | laptop + homelab |
+| 6 | Gateway | Bifrost and the NIM proxy, contrasted with LiteLLM | homelab |
+| 7 | Vector search | OpenSearch kNN and hybrid search; Elastic differences | homelab |
+| 8 | Graph | Neo4j, Cypher, graph-backed retrieval | homelab |
+| 9 | Ingestion | NV-Ingest and extraction | homelab |
+| 10 | RAG Blueprint | Assembling 5–9 as the blueprint does; NeMo Retriever and other NeMo microservices | homelab |
+| 11 | App | FastAPI backend, React/TS frontend, developed in the dev container with Tilt | homelab |
+| 12 | OpenTelemetry | Traces and metrics across every hop into the existing Grafana stack | homelab |
+| 13 | Volcano | Queues, gang scheduling, on CPU then on the GTX 1070 | homelab |
+| 14 | GPU day | Self-hosted NIM, NIM Operator, Volcano with real GPU jobs | rented GPU |
 
 ## How a module is produced and used
 
@@ -95,7 +97,7 @@ LEARNING.md                    log of what clicked and what is still fuzzy
 5. The learner explains the module back in a few sentences; gaps go in
    `LEARNING.md`.
 
-For module 10 the learner writes the application code with stepped hints;
+For module 11 the learner writes the application code with stepped hints;
 Claude supplies only scaffolding unrelated to the concept being learned.
 
 ## Lab environment
@@ -114,12 +116,14 @@ Claude supplies only scaffolding unrelated to the concept being learned.
 ## Delivery slices
 
 - **Slice 1 (this spec's implementation plan)**: repo skeleton, module 0, and
-  modules 1–5. Exit condition: Cline, on the laptop, completes a request that
-  travels Traefik → Bifrost → hosted NIM, and the learner has rebuilt modules
-  1–5 from the runbooks.
-- **Slice 2**: modules 6–9 (data path and blueprint).
-- **Slice 3**: modules 10–11 (app and observability).
-- **Slice 4**: modules 12–13 (Volcano and the GPU day).
+  modules 1–6. Exit condition: Cline, on the laptop, completes an agentic
+  coding task through the lab inference service, with the request travelling
+  Traefik → Bifrost → hosted NIM; a code change to the inference service
+  reaches the cluster through Tilt; and the learner has rebuilt modules 1–6
+  from the runbooks.
+- **Slice 2**: modules 7–10 (data path and blueprint).
+- **Slice 3**: modules 11–12 (app and observability).
+- **Slice 4**: modules 13–14 (Volcano and the GPU day).
 
 Each later slice gets its own short spec and plan.
 
@@ -136,7 +140,7 @@ Each later slice gets its own short spec and plan.
   exceed headroom. Mitigation: explicit limits, and scale earlier modules to
   zero when a later one needs the room.
 - **Hosted endpoint limits**: free-tier credits or rate limits may throttle
-  ingestion. Mitigation: small corpus; note the limits in module 4.
+  ingestion. Mitigation: small corpus; note the limits in module 5.
 - **Fast-moving components**: NVIDIA and Bifrost docs change often. Mitigation:
   each `REFS.md` records the versions the runbook was validated against and the
   date.
