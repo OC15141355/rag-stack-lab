@@ -19,7 +19,7 @@ The repo is neutral: it contains no employer, customer, or project names.
 |---|---|
 | Platform | Kubernetes (Tanzu in the target environment, RKE2 in the lab), Volcano GPU scheduling, H100/H200-class GPUs, Harbor, Podman |
 | Developer loop | Dev containers, Tilt, Cline against the inference service |
-| Edge / gateway | Traefik, Bifrost, NIM proxy |
+| Edge / gateway | Traefik, NIM proxy (Bifrost deferred) |
 | Model serving | NVIDIA NIMs, NeMo microservices, a uv-run Python inference service consumed by Cline |
 | RAG data path | NV-Ingest / NeMo extraction, OpenSearch (Elastic as comparison), Neo4j |
 | App | React/TypeScript frontend, Python/FastAPI backend |
@@ -141,6 +141,6 @@ Each later slice gets its own short spec and plan.
   zero when a later one needs the room.
 - **Hosted endpoint limits**: free-tier credits or rate limits may throttle
   ingestion. Mitigation: small corpus; note the limits in module 5.
-- **Fast-moving components**: NVIDIA and Bifrost docs change often. Mitigation:
+- **Fast-moving components**: NVIDIA docs change often. Mitigation:
   each `REFS.md` records the versions the runbook was validated against and the
   date.
