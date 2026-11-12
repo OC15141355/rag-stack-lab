@@ -36,6 +36,7 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 | 15 | [Cline with a self-hosted model](docs/prereading/15-cline-with-a-self-hosted-model.md) | Coding assistant |
 | 16 | [uv, FastAPI and React primer](docs/prereading/16-uv-fastapi-react-primer.md) | Chat |
 | 17 | [Clio-style conversation insights](docs/prereading/17-clio-conversation-insights.md) | Insights |
+| 18 | [Reading an established repo](docs/prereading/18-reading-an-established-repo.md) | Method |
 
 Number 06 is reserved for the LLM gateway, which is deferred.
 

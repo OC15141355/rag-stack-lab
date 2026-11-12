@@ -181,6 +181,9 @@ Follow a request from the outside in, then go underneath:
 15. [NeMo microservices](../prereading/02-nemo-microservices.md)
 16. [Clio-style conversation insights](../prereading/17-clio-conversation-insights.md)
 
+Separately, read [Reading an established repo](../prereading/18-reading-an-established-repo.md)
+before you open any existing codebase. It is a method, not a component.
+
 The first ten cover stages 1 and 2, which are what exist today. Numbers 11 to 15
 cover stage 3, and the last covers usage insights.
 
