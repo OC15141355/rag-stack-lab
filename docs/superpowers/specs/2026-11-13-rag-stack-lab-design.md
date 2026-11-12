@@ -23,7 +23,7 @@ The repo is neutral: it contains no employer, customer, or project names.
 | Model serving | NVIDIA NIMs, NeMo microservices, a uv-run Python inference service consumed by Cline |
 | RAG data path | NV-Ingest / NeMo extraction, OpenSearch (Elastic as comparison), Neo4j |
 | App | React/TypeScript frontend, Python/FastAPI backend |
-| Cross-cutting | OpenTelemetry |
+| Cross-cutting | OpenTelemetry; Clio-style conversation insights |
 | Reference architecture | NVIDIA RAG Blueprint |
 
 ## Constraints
@@ -52,7 +52,8 @@ The repo is neutral: it contains no employer, customer, or project names.
 README.md                      how to use the lab, module index, progress table
 docs/00-map/                   architecture, one request traced end to end, glossary
 modules/NN-name/
-  LESSON.md                    what, why, how it works, failure modes
+  LESSON.md                    plain version first (analogy, five things to
+                               remember), then what, why, how, failure modes
   RUNBOOK.md                   commands from nothing to working, with expected output
   CHECKS.md                    positive and negative consumer-side probes
   REFS.md                      official doc links, command cheat sheet
@@ -78,6 +79,7 @@ LEARNING.md                    log of what clicked and what is still fuzzy
 | 10 | RAG Blueprint | Assembling 5–9 as the blueprint does; NeMo Retriever and other NeMo microservices | homelab |
 | 11 | App | FastAPI backend, React/TS frontend, developed in the dev container with Tilt | homelab |
 | 12 | OpenTelemetry | Traces and metrics across every hop into the existing Grafana stack | homelab |
+| 12b | Insights | A small Clio-style pipeline over synthetic chat logs: summarise, embed, cluster, label, display; privacy thresholds | homelab |
 | 13 | Volcano | Queues, gang scheduling, on CPU then on the GTX 1070 | homelab |
 | 14 | GPU day | Self-hosted NIM, NIM Operator, Volcano with real GPU jobs | rented GPU |
 
