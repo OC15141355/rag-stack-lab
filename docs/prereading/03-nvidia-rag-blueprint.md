@@ -4,6 +4,20 @@
 
 The NVIDIA RAG Blueprint is a reference implementation of a retrieval-augmented generation (RAG) system built from NVIDIA NIM inference containers plus two small Python services: a RAG server (answers questions) and an ingestor server (loads documents). It ships as Docker Compose files and a Helm chart, and it is deliberately a starting point to fork, not a product. The default vector store is Elasticsearch (Milvus is the built-in alternative). There is no built-in graph database path, so Neo4j would be something you add yourself. **Status warning (checked 2026-11-13): the GitHub repo is archived (read-only) and its README carries a "Deprecation notice (Oct 2026): no longer actively maintained, new production use is not recommended".** Treat it as a well-documented architecture to learn from and copy parts of, not as an upstream you will track.
 
+## The plain version
+
+Imagine a very well-read assistant who has never seen your company's files. Ask about your warranty terms and they will confidently guess. Now give that assistant a good librarian. You ask the question, the librarian runs to the shelves, pulls the five most relevant pages, and slides them across the desk. The assistant reads those pages and answers from them, pointing at where each fact came from. That is this system. The assistant is the language model. The librarian is the search part. The filing clerk, who sorts new documents onto the shelves in the first place, is a second service that reads each file, including the tables and charts, and files it by meaning.
+
+Without it, you either get confident guesses, or you paste whole documents into every question, which is slow, costly and often too big to fit. NVIDIA's blueprint is a worked example of all these pieces already wired together, with a web page to try it on. One honest caveat: NVIDIA has stopped maintaining it, so it is a good textbook, not a good foundation to depend on.
+
+If you remember only five things:
+
+- The system has two jobs: filing documents in (ingest) and answering questions from them (query).
+- Search works by meaning, not just matching words, and a second "double-check" model re-sorts the results.
+- Everything is a separate container, so any part can be swapped, including the search database.
+- Default database is Elasticsearch; it has no built-in graph (Neo4j) feature.
+- The project is archived, so copy the ideas and pin your own fork.
+
 ## Why it exists
 
 Plain LLMs do not know your documents. RAG fixes that by looking up relevant text at question time and putting it in the prompt. If you run LiteLLM, you already know the last step: an OpenAI-style chat call. The blueprint is everything in front of that call, packaged as pieces that you can swap.
@@ -21,6 +35,8 @@ Plain LLMs do not know your documents. RAG fixes that by looking up relevant tex
 ## How it works
 
 ### Services (confirmed from the repo README, `service-port-gpu-reference.md`, compose files and Helm templates)
+
+In plain terms: the system is a set of small programs, each doing one job, that talk to each other over the network. Precisely, these are the containers:
 
 | Service | Container / Helm name | Port | Job |
 |---|---|---|---|
@@ -40,6 +56,8 @@ Optional pieces (all opt-in): NeMo Guardrails with Llama 3.1 NemoGuard 8B Conten
 
 ### Request path: a query
 
+In plain terms: a question goes in, passes through look-up and sorting steps, and an answer comes out. Precisely:
+
 ```
 client --POST /v1/generate--> rag-server :8081
    1. [optional] guardrails check on the input
@@ -55,6 +73,8 @@ Stages 2, 4, 5, 6 are the traced spans `query-rewriter`, `retriever`, `context-r
 
 ### Request path: an ingest
 
+In plain terms: a new file is read, cut into pieces, given a numeric "meaning fingerprint", and filed in the database. Precisely:
+
 ```
 client --POST /documents (multipart)--> ingestor-server :8082
    1. stores files, batches them (NV_INGEST_FILES_PER_BATCH=16, NV_INGEST_CONCURRENT_BATCHES=4)
@@ -68,6 +88,8 @@ client --POST /documents (multipart)--> ingestor-server :8082
 Step 4 is why the blueprint's vector DB layer is in the blueprint code (`src/nvidia_rag/utils/vdb/`), not in NV-Ingest: NV-Ingest returns extracted records, and the blueprint's `ElasticVDB` class writes them (it extends the `nv_ingest_client` VDB base class).
 
 ### Vector stores, and what about OpenSearch and Neo4j
+
+In plain terms: the vector store is the filing cabinet that can find pages by meaning, and the question is which cabinets fit. Precisely:
 
 - **Built in** (from `src/nvidia_rag/utils/vdb/` and the compose comments): `elasticsearch` (default since 2.6.0), `milvus` (GPU-accelerated, profile `milvus`), `lancedb` (only with the experimental `INGESTOR_BACKEND=nrl` ingest path).
 - **Hybrid search** is a setting, `APP_VECTORSTORE_SEARCHTYPE=dense|hybrid`, with `APP_VECTORSTORE_RANKER_TYPE=rrf|weighted` and `APP_VECTORSTORE_DENSE_WEIGHT` / `_SPARSE_WEIGHT`. The Elasticsearch class contains a hybrid path. The docs page `hybrid_search.md` itself is written for Milvus only.

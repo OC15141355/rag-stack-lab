@@ -6,6 +6,22 @@ Checked 2026-11-13. Docs read: VKS 3.8.0 variable reference, Supervisor Services
 
 "Tanzu Kubernetes" in a Broadcom-era vSphere shop now means **vSphere Kubernetes Service (VKS)**: a service that runs inside the **vSphere Supervisor** (a Kubernetes control plane built into vCenter/VCF) and creates ordinary upstream-style Kubernetes clusters as sets of VMs, using Cluster API. You do not install Kubernetes yourself, as you do with RKE2 on Proxmox. You ask the Supervisor for a `Cluster` object in a vSphere Namespace and it builds the VMs, the load balancer and the storage plumbing. You then get a kubeconfig and use the cluster as normal Kubernetes. GPUs reach pods because the cluster's VMs carry a GPU (passthrough or vGPU) via a VM class, and the NVIDIA GPU Operator runs inside the cluster.
 
+## The plain version
+
+Think of a big company with a building full of computers run by an IT department. A project team wants a private workshop where they can run their programs, but they do not want to build the workshop themselves: pour the floor, run the power, buy the machines. So the IT department offers a service. The team fills in an order form saying "I need a workshop with this many machines, this size, this much storage", and within minutes a ready-made workshop appears, inside a fenced-off area with a spending limit that IT set. The team gets keys to their workshop only. That is what this product does for Kubernetes (the system that starts, stops and supervises programs across many computers).
+
+Without it, every team would have to ask IT for individual virtual computers, install and patch Kubernetes on them by hand, and wire up networking and storage themselves. That is slow, easy to get wrong, and IT loses track of who is using what. The special-graphics-card machines needed for AI are the scarcest items, and this service lets IT hand them out in a controlled way.
+
+The confusing part is naming: the product has had several names over the years, so the same thing appears in old documents under different labels.
+
+If you remember only five things:
+
+- The product you want to know is called vSphere Kubernetes Service (VKS); older names for it are TKG Service and "vSphere with Tanzu".
+- It runs inside a control layer called the Supervisor, and you order clusters from it with a short form (a YAML file).
+- IT controls the fenced-off area (the vSphere Namespace): size limits, machine types, storage.
+- Graphics cards reach your programs by attaching the card to the virtual machine, and NVIDIA's GPU Operator then sets up the software inside.
+- You log in with a Broadcom command-line tool, and logins expire, so re-logging in fixes many odd errors.
+
 ## Why it exists
 
 You already run RKE2 on Proxmox: you create VMs, install RKE2, manage etcd, upgrades and CNI yourself, with ArgoCD on top. In a company with a large VMware estate, the vSphere administrators own the hypervisors, networking, storage and GPUs, and a separate team wants Kubernetes without owning all of that. VKS is the answer: the infrastructure team defines quotas, VM sizes and storage in vCenter, and Kubernetes users self-provision clusters inside those limits. It is closest to "Proxmox + Cluster API + a cloud provider", packaged and supported by the hypervisor vendor.
@@ -39,16 +55,16 @@ Rule of thumb for conversations: if someone says "Tanzu cluster" they almost cer
                            (you get a separate kubeconfig for it)
 ```
 
-Concepts, in plain terms:
+Each idea below starts with a plain one-line gloss, then the precise version.
 
-- **Supervisor**: a Kubernetes control plane enabled on a vSphere cluster. It can run with one or three control-plane VMs, and over one or three vSphere Zones (zones are vSphere clusters used as failure domains). With NSX networking it can also run "vSphere Pods"; with vSphere-distributed-switch networking it supports only VKS clusters (VCF 9.0 docs).
-- **vSphere Namespace**: not a plain Kubernetes namespace only; it is a vCenter-managed boundary. The administrator sets resource quotas, user permissions, storage policies, VM classes and content libraries on it. VKS clusters, VMs and vSphere Pods are created inside it.
-- **VM class**: a named VM size (CPU, memory, and optionally PCI devices such as a GPU). A class must be bound to the namespace before a cluster can use it.
-- **Storage policy**: a vSphere VM Storage Policy assigned to the namespace shows up as a Kubernetes StorageClass in the Supervisor and is referenced by the cluster's `storageClass` variable. Persistent volumes in workload clusters use the vSphere CSI driver. (CSI driver is standard knowledge, not re-checked in a doc this session.)
-- **Cluster API / ClusterClass**: the `Cluster` object (`cluster.x-k8s.io/v1beta1`) uses a topology section and a ClusterClass. The VKS 3.8.0 variable reference documents variables under `spec.topology.variables`: `vmClass` and `storageClass` are required; optional ones include `kubernetes` (API server, etcd, kubelet settings), `node` (labels, taints), `osConfiguration` (NTP, additional trusted CAs, sshd, proxy), `networks`, `volumes` (extra disks), and `bootstrapAddons`.
-- **Kubernetes releases (VKr)**: Kubernetes versions are delivered as vSphere Kubernetes releases, VM templates distributed through a content library. VMware's VKS 3.5 announcement states each Kubernetes minor gets 24 months of support starting with VKr 1.34.
-- **Load balancing**: the VCF 9.0 docs list options for the Supervisor: VCF Networking with VPC (recommended), Foundation Load Balancer (vDS only, Layer 4), NSX with Edge load balancer, or Avi Load Balancer with NSX or vDS. A `Service` of type LoadBalancer in a workload cluster gets an address from this layer.
-- **Supervisor Services**: add-on services installed on the Supervisor. The catalogue lists, among others: VKS, Cloud Native Registry (**Harbor** 2.12.4 to 2.14.3), Kubernetes Ingress (Contour), External DNS, Velero-based Backup & Recovery, ArgoCD Service (needs vSphere 8.0 U3g+ and a VCF entitlement), and Private AI Services (VCF 9 only).
+- **Supervisor** (gloss: the building manager's own Kubernetes, which takes your orders for new clusters): a Kubernetes control plane enabled on a vSphere cluster. It can run with one or three control-plane VMs, and over one or three vSphere Zones (zones are vSphere clusters used as failure domains). With NSX networking it can also run "vSphere Pods"; with vSphere-distributed-switch networking it supports only VKS clusters (VCF 9.0 docs).
+- **vSphere Namespace** (gloss: your fenced-off plot with a spending limit): not a plain Kubernetes namespace only; it is a vCenter-managed boundary. The administrator sets resource quotas, user permissions, storage policies, VM classes and content libraries on it. VKS clusters, VMs and vSphere Pods are created inside it.
+- **VM class** (gloss: a menu of machine sizes, some with a graphics card): a named VM size (CPU, memory, and optionally PCI devices such as a GPU). A class must be bound to the namespace before a cluster can use it.
+- **Storage policy** (gloss: IT's named grades of disk space, such as fast or cheap): a vSphere VM Storage Policy assigned to the namespace shows up as a Kubernetes StorageClass in the Supervisor and is referenced by the cluster's `storageClass` variable. Persistent volumes in workload clusters use the vSphere CSI driver. (CSI driver is standard knowledge, not re-checked in a doc this session.)
+- **Cluster API / ClusterClass** (gloss: the order form and its template for "build me a cluster"): the `Cluster` object (`cluster.x-k8s.io/v1beta1`) uses a topology section and a ClusterClass. The VKS 3.8.0 variable reference documents variables under `spec.topology.variables`: `vmClass` and `storageClass` are required; optional ones include `kubernetes` (API server, etcd, kubelet settings), `node` (labels, taints), `osConfiguration` (NTP, additional trusted CAs, sshd, proxy), `networks`, `volumes` (extra disks), and `bootstrapAddons`.
+- **Kubernetes releases (VKr)** (gloss: the pre-approved Kubernetes versions you may choose from): Kubernetes versions are delivered as vSphere Kubernetes releases, VM templates distributed through a content library. VMware's VKS 3.5 announcement states each Kubernetes minor gets 24 months of support starting with VKr 1.34.
+- **Load balancing** (gloss: a receptionist who spreads incoming visitors across your servers and gives them one front-door address): the VCF 9.0 docs list options for the Supervisor: VCF Networking with VPC (recommended), Foundation Load Balancer (vDS only, Layer 4), NSX with Edge load balancer, or Avi Load Balancer with NSX or vDS. A `Service` of type LoadBalancer in a workload cluster gets an address from this layer.
+- **Supervisor Services** (gloss: optional extras IT can switch on for everyone, like a shared image library): add-on services installed on the Supervisor. The catalogue lists, among others: VKS, Cloud Native Registry (**Harbor** 2.12.4 to 2.14.3), Kubernetes Ingress (Contour), External DNS, Velero-based Backup & Recovery, ArgoCD Service (needs vSphere 8.0 U3g+ and a VCF entitlement), and Private AI Services (VCF 9 only).
 
 ## How you run it
 

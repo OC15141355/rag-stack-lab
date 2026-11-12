@@ -4,6 +4,22 @@
 
 NV-Ingest turns messy documents (PDFs with tables, charts and scanned pages; Office files; HTML; images; audio) into clean text chunks plus structured metadata that you can embed and search. It does this by splitting documents into pages, running a small set of GPU vision models (page-layout detection, table-structure detection, chart-element detection, OCR) via NIM containers, and assembling the results into a fixed JSON schema. NVIDIA has since renamed it: the GitHub repo `NVIDIA/nv-ingest` now redirects to `NVIDIA/NeMo-Retriever`, and the product is called "NeMo Retriever Library" (older material says "NV-Ingest" or "NVIDIA Ingest"; the docs say they are the same thing). Important for you: the RAG Blueprint pins the old architecture (image `nv-ingest:26.3.0`), while the current release (26.8.x) has a reworked service. This note covers both and says which is which.
 
+## The plain version
+
+Think of a mail-room clerk who opens a huge pile of paperwork before it goes to the archive. A bad clerk just photocopies the text and throws away anything that is not plain sentences: the tables turn to jumbled words, the charts vanish, the scanned pages come out blank. A good clerk looks at every page, notices "this part is a table, that part is a chart, this is a scanned photo", reads each properly, and writes a tidy summary card for each piece. This software is the good clerk, and it uses a few specialised "eyes" (vision models) to do the looking.
+
+If it did not exist, anything locked inside tables, figures and scans would never reach the search system, and the assistant would simply never be able to answer questions about it. The clerk is only as good as its inputs, and a search system cannot find what was never written down.
+
+One thing to know: NVIDIA renamed it, and there are two generations. The blueprint uses the older one.
+
+If you remember only five things:
+
+- It reads documents page by page and treats text, tables, charts and scans differently.
+- It needs graphics cards for its vision models, or can borrow NVIDIA's hosted ones over the internet.
+- Its output is neat records of text plus labels, ready to be turned into searchable form.
+- Getting those records into your database is a separate step you may have to write.
+- The name has changed (nv-ingest to NeMo Retriever Library); pin the exact version.
+
 ## Why it exists
 
 A naive pipeline does `pdftotext`, then chunks. That loses tables (columns collapse into a word stream), drops everything inside charts and scanned images, and ignores layout. For enterprise documents, much of the answer lives in tables and figures. Extraction quality bounds RAG quality: the best retriever cannot return a chunk that was never extracted.
@@ -13,6 +29,8 @@ What it resembles in your world: a batch ETL service in front of a data store, w
 ## How it works
 
 ### Pipeline stages (from the overview docs and the 26.03/26.08 support matrices)
+
+In plain terms: each page is inspected, its parts are sent to the right specialist model, and the findings are cut into pieces. Precisely:
 
 ```
 file -> split into pages -> (text via PDFium)  ----------------------+
@@ -47,6 +65,8 @@ avi, bmp, docx, html (converted to markdown), jpeg, json (as text), md (as text)
 
 ### Architecture, 26.3.0 (the version the blueprint pins)
 
+In plain terms: jobs wait in a queue, a pool of workers picks them up, and the workers phone the model servers. Precisely (a "message broker" is just the queue software, here Redis; "Ray" is a Python framework that runs many workers in parallel):
+
 ```
 ingestor-server --(Python client, port 7670 HTTP API)--> nv-ingest-ms-runtime
                                                             |  Redis list "ingest_task_queue" (message broker, :6379)
@@ -59,9 +79,13 @@ Facts from the blueprint's compose file: the runtime image is `nvcr.io/nvidia/ne
 
 ### Architecture, 26.08.x (current release)
 
+In plain terms: the newer version is rebuilt as a web service with a cleaner front door. Precisely:
+
 The newer docs describe a "Retriever service" with a gateway, a job-creation REST contract (`POST /v1/ingest/job`, then multipart uploads to `/v1/ingest/job/{job_id}/document`), collections (`/v1/collections`), queries (`/v1/query`), and probes `GET /v1/live` and `GET /v1/health`. Results come back as a Ray Dataset or pandas DataFrame. The Python API is `create_ingestor(run_mode=...)` with modes `inprocess`, `batch` and `service`. The README says legacy ingestion APIs are being phased out and the default vector store in this line is LanceDB. UNVERIFIED: whether Redis remains in the 26.08 service data path; I did not find a statement either way, and the Helm chart README was not opened.
 
 ### Output schema
+
+In plain terms: every extracted piece comes out as a labelled card. Precisely:
 
 Each extracted object is a record with `content_metadata.type` (`text`, `structured` for tables/charts, `image`, `audio`), the text or markdown content, source metadata (file, page), optional embedding, and type-specific blocks (`text_metadata`, `table_metadata`, `image_metadata`, `audio_metadata`). Reference: `content-metadata.md`.
 

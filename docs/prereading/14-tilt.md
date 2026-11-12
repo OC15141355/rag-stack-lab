@@ -4,6 +4,22 @@
 
 Tilt is a command-line tool that watches your source tree, rebuilds container images, applies Kubernetes manifests, and shows build and pod status in one web page, all driven by a program called a Tiltfile. Its main trick is "live update": instead of rebuilding an image and rolling a pod for every code change, it copies the changed files straight into the running container and optionally runs a command, which brings the edit-to-running loop down to seconds. You already know the other half of this: Helm renders manifests, `kubectl apply` applies them, Argo CD reconciles them. Tilt is the developer-side counterpart that does build, push, apply and watch in a loop, against a dev cluster, before anything reaches GitOps. Docs checked 2026-11-13; the Tilt docs pages do not state a single version (the install page example uses 0.37.8, which may not be current).
 
+## The plain version
+
+Imagine you are writing a recipe and testing it on guests. Without help, every time you change a pinch of salt you must cook the whole meal again, carry it to the dining room, and wait for the guests to taste it. Tilt is like a kitchen assistant who stands next to you: when you change the recipe, the assistant instantly adjusts the dish on the table when that is possible, and only re-cooks from scratch when the change is big. There is also a screen on the wall showing what is cooking, what burned, and what is ready.
+
+Without Tilt, a developer testing against a real Kubernetes cluster has to repeat a long chain of steps by hand (build the package, upload it, tell the cluster to use it, wait, read the logs), and it can take minutes for each small change. People respond by testing less, or by testing somewhere that is not like the real thing.
+
+The point is speed of feedback: seconds instead of minutes, in a setup that resembles production.
+
+If you remember only five things:
+
+- Tilt watches your files and keeps a practice cluster up to date with them.
+- Its instructions live in a file called the `Tiltfile`, which is a small program.
+- "Live update" copies changed files into a running program instead of rebuilding it.
+- `tilt up` starts it, `tilt down` cleans up, and a web page at port 10350 shows status.
+- It is for practice (development) clusters only; your real environments stay under GitOps.
+
 ## Why it exists
 
 The inner loop problem: edit code, build image, push to registry, update the Deployment, wait for the pod, read logs. Done by hand that is minutes per change. A shell script or `make` can chain the steps but gives you no dependency graph, no live logs per service, and no incremental update. Tilt's docs say Live Update "optimizes your setup to get updates down from minutes to seconds".
@@ -11,6 +27,8 @@ The inner loop problem: edit code, build image, push to registry, update the Dep
 Resembles: a controller reconcile loop for your laptop. You declare resources, Tilt keeps the cluster matching your working tree.
 
 ## How it works
+
+In plain terms: Tilt notices you saved a file, decides the cheapest way to get that change into the running cluster, does it, and shows you the result. The precise version follows.
 
 ```
  working tree --(file watch)--> Tilt engine ---> build image  -> push -> kubectl apply
@@ -25,6 +43,8 @@ Resembles: a controller reconcile loop for your laptop. You declare resources, T
 - Typical flow (Tilt "tiltfile_concepts"): `k8s_yaml` loads manifests, `docker_build` tells Tilt how to build an image named in those manifests, and Tilt matches them up and creates one resource per workload.
 
 ### Live update rules (docs.tilt.dev/live_update_reference.html)
+
+Plain gloss: live update is "swap the changed pages into the running book" instead of "reprint the whole book"; these are the rules for when that is allowed.
 
 - Only changes matching a `sync` step trigger a live update. A change in the build context that matches no `sync` triggers a full image build. A change outside both does nothing.
 - A change matching `fall_back_on(files)` forces a full rebuild (use it for `pyproject.toml`, `uv.lock`, the Dockerfile).

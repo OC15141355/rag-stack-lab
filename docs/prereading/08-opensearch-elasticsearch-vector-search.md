@@ -6,6 +6,22 @@ Versions described: OpenSearch docs "latest" = 3.9 (Helm chart 3.9.0); Elasticse
 
 OpenSearch and Elasticsearch are distributed search engines built on Apache Lucene. They store JSON documents, index them so that keyword search is fast (an "inverted index"), and rank results with a scoring formula (BM25). Both can also store embedding vectors and find the nearest ones to a query vector, using an approximate algorithm called HNSW. For RAG (retrieval-augmented generation: fetch relevant text, then give it to an LLM) the useful property is that one engine can do keyword search, vector search and a blend of the two ("hybrid search") over the same documents. OpenSearch is the Apache-2.0 fork of Elasticsearch 7.10; the two have since diverged in API names, features and licence, so the docs for one are not safe to copy-paste for the other.
 
+## The plain version
+
+Think of a huge library with no catalogue. If you want books about "keeping the garden alive in a dry summer", you would have to walk every shelf and read every cover. A search engine is the library's catalogue and a very fast, well-read librarian in one. At the moment books arrive, it writes an index card for every important word ("drought", "watering", "soil") listing which books mention it. Ask a question and it flips straight to the right cards, then puts the best-matching books on top.
+
+That covers matching words. The newer trick is matching meaning. Every passage is turned into a long list of numbers that acts like a map coordinate: passages about the same idea land near each other, even if they use different words. "Keeping plants alive in a heatwave" ends up next to "drought watering tips" although they share almost no words. The engine can find the nearest neighbours on that map very quickly, and it can combine "same words" and "same meaning" into one ranked list.
+
+Without it, an AI assistant that must answer from your own documents would have to read everything every time (far too slow and costly), or it would guess. With it, the assistant first fetches the handful of passages that matter and then answers from them.
+
+If you remember only five things:
+
+- It is a catalogue-and-librarian for text, spread over several machines so it stays fast and survives a failure.
+- Words are matched with index cards (keyword search); meaning is matched with number maps (vector search); the best systems use both.
+- The numbers for each passage must always come from the same model, with the same length, or nothing lines up.
+- Memory is the main cost: vectors want to live in RAM, so sizing is arithmetic you do before you deploy.
+- OpenSearch and Elasticsearch look alike but are different products; copy commands only from the docs of the one you run.
+
 ## Why it exists
 
 You already run PostgreSQL. A search engine solves a problem Postgres handles poorly at scale: "find the most relevant documents for this free-text query, fast, across hundreds of millions of rows, and rank them." Postgres has `tsvector` full-text search and the pgvector extension, so the closest comparison is: Elasticsearch/OpenSearch is a purpose-built, horizontally sharded version of "GIN full-text index plus vector index", with a REST/JSON API instead of SQL, and with relevance ranking as its core feature rather than an add-on.
@@ -26,9 +42,13 @@ Key terms, in order:
 
 ### Vectors
 
+Plain gloss: a vector is a coordinate on a map of meaning, and "search" means finding the closest coordinates.
+
 An **embedding** is a list of floating-point numbers (a vector) produced by a model so that texts with similar meaning give vectors that are close together. The list length is the **dimension** (e.g. 1024). Every vector in a field, and every query vector, must have the same dimension and come from the same model. If you change model you must re-embed and reindex everything.
 
 Closeness is measured by a **space / similarity**: L2 (Euclidean distance), cosine similarity, or inner (dot) product. OpenSearch accepts `l1, l2, linf, cosinesimil, innerproduct, hamming, hammingbit` (not every engine supports each). Elasticsearch accepts `l2_norm, dot_product, cosine, max_inner_product`. Use the metric your embedding model was trained for. For cosine, Elasticsearch normalises vectors to unit length on indexing; `dot_product` requires you to supply unit-length vectors yourself.
+
+Plain gloss on exact versus approximate: checking every house on the street versus asking the neighbours who live nearby.
 
 **Exact k-NN** compares the query to every vector: perfectly accurate, cost grows linearly. **Approximate k-NN (ANN)** builds a data structure so only a small part of the data is examined, trading a little recall for large speed gains. The dominant structure is **HNSW** (Hierarchical Navigable Small World): a layered graph where each vector links to nearby vectors; a search enters at the sparse top layer and greedily walks down to the neighbourhood of the query. Parameters:
 
@@ -36,11 +56,15 @@ Closeness is measured by a **space / similarity**: L2 (Euclidean distance), cosi
 - `ef_construction`: candidate list size while building the graph. Higher = better graph, slower indexing. (OpenSearch default 100.)
 - `ef_search`: candidate list size at query time. Higher = better recall, slower. (OpenSearch Faiss default 100; the Lucene engine ignores it and uses `k`.) Elasticsearch's equivalent query-time knob is `num_candidates`.
 
+Plain gloss on quantisation: rounding every number to fewer digits so the map takes less space, at the price of a slightly blurrier picture.
+
 **Quantisation** shrinks vectors to save memory: scalar quantisation (float32 to int8/int4/fp16) or binary (1 bit per dimension, about 32x smaller), or product quantisation (OpenSearch Faiss). It costs some accuracy, often recovered by fetching extra candidates and rescoring with the full vectors. Elasticsearch keeps the raw floats on disk and adds the quantised copy, so disk goes up (docs: about 25% for int8, 3.1% for bbq) while RAM goes down.
 
 Memory rule of thumb from the OpenSearch docs: HNSW needs about `1.1 * (4 * dimension + 8 * m)` bytes per vector, e.g. 1,000,000 vectors at 256 dims and m=16 is about 1.27 GB. At 1024 dims and m=16 that is about 4.7 GB per million vectors, before replicas.
 
 ### Hybrid search
+
+Plain gloss: ask two judges (one counts matching words, one judges meaning) and merge their rankings into one.
 
 ```
  query text ──► BM25 match on text field ──► ranked list A ─┐
@@ -52,6 +76,8 @@ BM25 scores and vector scores are on different scales, so you cannot just add th
 
 ### OpenSearch specifics (3.9 docs)
 
+Plain gloss: OpenSearch bolts vector support on as a plugin, and offers a choice of underlying libraries ("engines") that do the nearest-neighbour work.
+
 - Vector support is the **k-NN plugin**. Create the index with `"index.knn": true` and map the field as `knn_vector` with required `dimension` (1 to 16,000). Optional: `data_type` (`float` default, `byte`, `binary`, `half_float`), `space_type`, `mode` (`in_memory` default, or `on_disk`), `compression_level` (`1x` to `32x`), and a `method` object.
 - **Engines**: `faiss` (default per the methods page; HNSW and IVF, plus PQ/SQ encoders), `lucene` (HNSW, good filtering, suits smaller deployments), `nmslib` (deprecated), `jvector` (separate plugin). The `engine` default in the method definition is `faiss`.
 - **Queries**: `knn` query (`vector`, `k` up to 10,000, optional `filter`, `method_parameters.ef_search`, `rescore`), and `neural` query (give text; the cluster embeds it with a deployed ML model).
@@ -61,6 +87,8 @@ BM25 scores and vector scores are on different scales, so you cannot just add th
 
 ### Elasticsearch specifics (9.x docs)
 
+Plain gloss: Elasticsearch builds vector support into one field type and lets you describe a search as a small tree of ranking steps ("retrievers").
+
 - Field type `dense_vector` with `dims`, optional `similarity`, `element_type` (`float` default, `byte`, `bit`), `index_options.type`. Indexing for kNN is on by default. `dense_vector` fields are excluded from `_source` by default (vectors do not come back in search hits unless you ask).
 - Default index type for float vectors (per the docs' default-quantisation section): `bbq_hnsw` for 384 or more dimensions, `int8_hnsw` below that; `bbq_disk` is the default "when available under the current license". The page is version-conditional (it also says "In Elastic Stack 9.0, float dense vector fields are always indexed as int8_hnsw"), so pin `index_options` explicitly if you care.
 - **kNN search**: top-level `knn` option in `_search` (`field`, `query_vector`, `k`, `num_candidates`, `filter`, or `query_vector_builder` to embed text server-side), or a `knn` query usable inside `bool`.
@@ -68,6 +96,8 @@ BM25 scores and vector scores are on different scales, so you cannot just add th
 - **`semantic_text`**: a field type that calls an inference endpoint at index time, picks dense or sparse vector mapping, and chunks long text automatically; no ingest pipeline needed. The docs warn it "typically calls the Inference API, which requires an appropriate license".
 
 ### Where they differ
+
+Plain gloss: same ancestor, now two products with different names for the same ideas.
 
 | Topic | OpenSearch 3.9 | Elasticsearch 9.x |
 |---|---|---|

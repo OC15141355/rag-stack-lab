@@ -6,6 +6,22 @@ Docs version described: Traefik v3.7 (the doc pages' edit links point at the `v3
 
 Traefik is a reverse proxy that learns its routes from "providers" (Kubernetes, Docker, files) instead of from a config file you reload by hand. You describe traffic in four layers: entrypoints (ports Traefik listens on), routers (match rules), middlewares (request/response transforms such as auth or rate limits) and services (where traffic goes). On Kubernetes it reads standard `Ingress` objects, its own CRDs (`IngressRoute`, `Middleware`, ...), and Gateway API objects. For an LLM stack it is the edge: it terminates TLS, runs auth and rate limits, and forwards long-lived streaming responses to the inference service / LLM gateway. It can run beside ingress-nginx using a separate IngressClass.
 
+## The plain version
+
+Think of a large office building with one front door and a receptionist. Visitors do not wander the corridors. They tell the receptionist who they are here to see, and she checks her list, checks their ID, perhaps says "that department only takes ten visitors an hour", and then sends them to the right room. When a department moves floors, someone updates her list and she follows it straight away, with no need to close the building.
+
+Traefik is that receptionist for a group of computer programs. People and apps on the internet knock on one door. Traefik looks at what they asked for (which website name, which page), decides which internal program should answer, applies the house rules (ID check, speed limit, privacy lock), and passes the answer back. It also keeps the lock on the front door, the secure connection, up to date.
+
+Without it, every program would need its own front door, its own lock, its own ID check and its own visitor log, and each would be set up differently. Changing one rule would mean touching ten programs. Chat-style AI answers add a special difficulty: they arrive a few words at a time over many seconds, so the receptionist must not hold the answer until it is complete or hang up on a slow one.
+
+If you remember only five things:
+
+- Traefik is the single front door; everything public goes through it.
+- Four ideas: a door (entrypoint), a rule for where to send visitors (router), the house rules (middleware), and the destination (service).
+- It learns its list from Kubernetes itself, so adding an app updates the list automatically.
+- It can sit beside your current front door (ingress-nginx) if each handles different applications, and you move apps over one at a time.
+- For streamed AI answers, avoid anything that waits for the whole reply, and check the timeouts.
+
 ## Why it exists
 
 Classic reverse proxies (nginx, HAProxy) are configured from a file; in Kubernetes a controller renders that file from `Ingress` objects and reloads. Traefik was built around the idea that routing config is dynamic data: the proxy watches the orchestrator and updates its routing table in memory, with no template-and-reload step.
@@ -21,7 +37,7 @@ A note on timing: Traefik's own ingress-nginx provider page and the cert-manager
 
 ## How it works
 
-Request path inside Traefik (the vocabulary the docs use):
+In plain terms: a request walks in through a door, a rule picks where it should go, some checks happen on the way, and then it reaches the right program. Precisely, this is the request path inside Traefik (the vocabulary the docs use):
 
 ```
 client --> EntryPoint (:80 / :443)
@@ -41,17 +57,19 @@ client --> EntryPoint (:80 / :443)
 Providers (Kubernetes Ingress / CRD / Gateway API) --> generate routers, middlewares, services
 ```
 
-Definitions (from the v3.7 docs overview):
+Definitions (from the v3.7 docs overview), each with a plain gloss first:
 
-- **EntryPoint**: a port and protocol (TCP/UDP) Traefik listens on. Defined in static config (startup config), not by providers.
-- **Router**: matches requests (host, path, headers) and sends them to a service, optionally through middlewares.
-- **Service**: how to reach backends. In Kubernetes this is a Kubernetes `Service`; Traefik load-balances across the endpoints.
-- **Middleware**: modifies the request or acts before forwarding.
-- **Provider**: an infrastructure system Traefik queries for routing data and watches for changes.
+- **EntryPoint** (the door Traefik answers): a port and protocol (TCP/UDP) Traefik listens on. Defined in static config (startup config), not by providers.
+- **Router** (the "who goes where" rule): matches requests (host, path, headers) and sends them to a service, optionally through middlewares.
+- **Service** (the destination): how to reach backends. In Kubernetes this is a Kubernetes `Service`; Traefik load-balances across the endpoints.
+- **Middleware** (a check or tweak on the way): modifies the request or acts before forwarding.
+- **Provider** (where Traefik reads its list from): an infrastructure system Traefik queries for routing data and watches for changes.
 
-Static vs dynamic configuration: static config (entrypoints, providers, metrics, tracing, API/dashboard) is set at startup via flags, a file, or Helm values. Dynamic config (routers, services, middlewares) comes from providers and updates live.
+Static vs dynamic configuration. In plain terms: some settings are fixed when Traefik starts, and the rest change while it runs. Precisely: static config (entrypoints, providers, metrics, tracing, API/dashboard) is set at startup via flags, a file, or Helm values. Dynamic config (routers, services, middlewares) comes from providers and updates live.
 
 ### Ingress vs IngressRoute CRD vs Gateway API
+
+In plain terms: there are three ways to write down "send this website name to that program", from the oldest, most portable form to the newest standard. The precise comparison:
 
 | | Kubernetes `Ingress` | Traefik CRDs (`IngressRoute`, `Middleware`, ...) | Gateway API |
 |---|---|---|---|

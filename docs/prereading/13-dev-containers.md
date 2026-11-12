@@ -6,6 +6,22 @@ A dev container is a container that holds your development environment (compiler
 
 Sources and versions: the spec pages on containers.dev show no version number (footer "2026 Microsoft"); the VS Code docs page is dated 11/11/2026; the devcontainer CLI install script example uses 0.82.0 (an example, not necessarily latest). All checked 2026-11-13.
 
+## The plain version
+
+Think of a professional kitchen versus cooking at home. At home, every cook uses their own pans, knives and half-remembered recipes, so the same dish tastes different each time. In a restaurant, every station is set up the same way: same knives, same pans, same labelled ingredients, and a new cook can start on day one. A dev container is that station, for people who write software. Instead of each person installing the right versions of tools on their own computer and slowly drifting apart, the project carries a written description of the workspace, and the computer builds an identical, sealed-off workspace from it.
+
+Without it, a new person spends days installing things, and then hears "it works on my machine" every time something behaves differently. Small differences, such as a slightly older tool, cause confusing bugs that no one can reproduce. Cleaning up is also hard: if your laptop is full of half-installed tools, you cannot easily start fresh.
+
+The catch for this project: the tool that builds the sealed workspace is normally Docker, and this team uses a different one, Podman. It mostly works, but you will meet some fiddly problems about who owns which files.
+
+If you remember only five things:
+
+- A dev container is a ready-made, identical workspace described in one file in the project.
+- The file is `.devcontainer/devcontainer.json`.
+- Your editor runs inside the workspace, so its extensions (including Cline) live there too.
+- Podman replaces Docker through one VS Code setting, `dev.containers.dockerPath`.
+- Most problems are about file ownership, or the workspace not being able to reach the cluster or registry.
+
 ## Why it exists
 
 The problem: "works on my machine". Onboarding means installing the right Python, kubectl, Helm, Tilt, linters, and extensions, and those drift between people. You already know the cure in your own world: pin the toolchain in a declarative file and let a tool reconcile it. A dev container is that, for a workstation. It resembles a CI runner image that you also type into, and it resembles a Helm values file in the sense that the repo declares the desired environment.
@@ -13,6 +29,8 @@ The problem: "works on my machine". Onboarding means installing the right Python
 The spec describes itself as metadata added to existing container formats; it does not create a new orchestrator. Its first format is `devcontainer.json`, "structured JSON with Comments (jsonc)". (containers.dev/overview)
 
 ## How it works
+
+In plain terms: your editor is split in two, a thin front half on your computer and a working back half inside a container, and a small tool in the middle starts the container for you. The precise version follows.
 
 ```
  host (Mac / Linux)                       container engine (Podman)
@@ -29,11 +47,15 @@ Per the VS Code docs: workspace files are bind-mounted from the local filesystem
 
 ### Three ways to define the container
 
+Plain gloss: you can describe the workspace as "use this ready-made box", "build a box from this recipe", or "start several boxes that work together".
+
 1. Image: `"image": "mcr.microsoft.com/devcontainers/python:3.12"`. Simplest.
 2. Dockerfile: `"build": { "dockerfile": "Dockerfile", "context": "..", "args": {...}, "target": "..." }`. Paths are relative to `devcontainer.json`. Use when you need to bake in a corporate CA or pinned tools.
 3. Docker Compose: `"dockerComposeFile": "compose.yaml"`, `"service": "dev"`, optional `"runServices"`. Use when the dev container needs sidecars (for example a database). Later files in an array override earlier ones.
 
 ### Anatomy of the properties you will meet
+
+Plain gloss: these are the settings on the workspace description: what to install, which doors to open, which user you are, and what to run after it is built.
 
 All from containers.dev/implementors/json_reference (checked 2026-11-13):
 
@@ -115,6 +137,8 @@ podman info | head                                            # confirm the VM i
 Bind-mount default behaviour of the VM (which host folders are shared): UNVERIFIED, the page did not cover it. Keep the repo under your home directory and test a mount early.
 
 ### Rootless: UID mapping and SELinux
+
+Plain gloss: inside the box you are a different "person" with a different ID number than outside, so files can look like they belong to a stranger; these settings line the two identities up.
 
 Rootless Podman uses a user namespace (a remapping of user IDs between host and container). From the `podman run` man page:
 
