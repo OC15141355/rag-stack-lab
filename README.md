@@ -43,6 +43,7 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 | 18 | [Reading an established repo](docs/prereading/18-reading-an-established-repo.md) | Method |
 | 19 | [Day-one field guide](docs/prereading/19-day-one-field-guide.md) | Method |
 | 20 | [How it fits together](docs/prereading/20-how-it-fits-together.md) | Whole system |
+| 21 | [Dev environment setup](docs/prereading/21-dev-environment-setup.md) | Dev loop |
 
 A blank [day-one notes template](templates/day-one-notes.md) is in `templates/`.
 Copy it somewhere private before filling it in.
