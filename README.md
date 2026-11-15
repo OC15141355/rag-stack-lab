@@ -8,6 +8,9 @@ the commands and references needed to work with it.
 
 1. Read [the map](docs/00-map/README.md). It shows the whole system and the
    reading order.
+   Then read [how it fits together](docs/prereading/20-how-it-fits-together.md),
+   the engineer's version: bytes on the wire, who owns what, GPU serving,
+   failure map.
 2. Work through the pre-reading in [docs/prereading/](docs/prereading/) in that
    order. Each document ends with "Check yourself" questions.
 3. Note what clicked and what is still fuzzy in [LEARNING.md](LEARNING.md).
@@ -25,6 +28,7 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 | 03 | [NVIDIA RAG Blueprint](docs/prereading/03-nvidia-rag-blueprint.md) | RAG |
 | 04 | [NV-Ingest and extraction](docs/prereading/04-nv-ingest-extraction.md) | RAG |
 | 05 | [Traefik](docs/prereading/05-traefik.md) | Chat |
+| 06 | [Bifrost LLM gateway](docs/prereading/06-bifrost-llm-gateway.md) | Chat |
 | 07 | [OpenTelemetry](docs/prereading/07-opentelemetry.md) | Chat |
 | 08 | [OpenSearch and Elasticsearch vector search](docs/prereading/08-opensearch-elasticsearch-vector-search.md) | RAG |
 | 09 | [Neo4j and graph retrieval](docs/prereading/09-neo4j-graph.md) | RAG |
@@ -37,8 +41,11 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 | 16 | [uv, FastAPI and React primer](docs/prereading/16-uv-fastapi-react-primer.md) | Chat |
 | 17 | [Clio-style conversation insights](docs/prereading/17-clio-conversation-insights.md) | Insights |
 | 18 | [Reading an established repo](docs/prereading/18-reading-an-established-repo.md) | Method |
+| 19 | [Day-one field guide](docs/prereading/19-day-one-field-guide.md) | Method |
+| 20 | [How it fits together](docs/prereading/20-how-it-fits-together.md) | Whole system |
 
-Number 06 is reserved for the LLM gateway, which is deferred.
+A blank [day-one notes template](templates/day-one-notes.md) is in `templates/`.
+Copy it somewhere private before filling it in.
 
 ## How to read the pre-reading
 

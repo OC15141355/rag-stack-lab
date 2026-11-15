@@ -120,7 +120,9 @@ Solid arrows are requests. Dotted arrows are platform relationships.
    portal backend's Kubernetes Service.
 3. **Portal backend (FastAPI).** It checks who the user is, loads the
    conversation, builds the list of messages, and calls the inference service.
-4. **Inference service.** It exposes an OpenAI-compatible API
+4. **Inference service / gateway.** (Whether an LLM gateway such as Bifrost
+   sits here as well, in front of or behind an in-house service, is something
+   to confirm; see doc 20, section 2.0.) It exposes an OpenAI-compatible API
    (`/v1/chat/completions`). It picks the model, forwards the request to the
    right NIM, and streams tokens back. Because the API is OpenAI-compatible,
    any client that speaks that protocol can use it, which is why Cline can.
@@ -168,6 +170,7 @@ Follow a request from the outside in, then go underneath:
 2. [Cline with a self-hosted model](../prereading/15-cline-with-a-self-hosted-model.md)
 3. [uv, FastAPI and React primer](../prereading/16-uv-fastapi-react-primer.md)
 4. [Traefik](../prereading/05-traefik.md)
+4a. [Bifrost LLM gateway](../prereading/06-bifrost-llm-gateway.md)
 5. [Dev containers](../prereading/13-dev-containers.md)
 6. [Tilt](../prereading/14-tilt.md)
 7. [Harbor, Podman and images](../prereading/12-harbor-podman-images.md)
@@ -180,6 +183,9 @@ Follow a request from the outside in, then go underneath:
 14. [Neo4j and graph retrieval](../prereading/09-neo4j-graph.md)
 15. [NeMo microservices](../prereading/02-nemo-microservices.md)
 16. [Clio-style conversation insights](../prereading/17-clio-conversation-insights.md)
+
+After the map, read [How it fits together](../prereading/20-how-it-fits-together.md)
+for the engineer's version of everything above.
 
 Separately, read [Reading an established repo](../prereading/18-reading-an-established-repo.md)
 before you open any existing codebase. It is a method, not a component.
