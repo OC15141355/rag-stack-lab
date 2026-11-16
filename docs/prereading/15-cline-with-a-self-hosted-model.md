@@ -155,6 +155,28 @@ curl -s $BASE/chat/completions -H "Authorization: Bearer $KEY" -H 'Content-Type:
 
 Step 6 sends roughly 100k tokens (about one token per "word "; adjust). Raise or lower the repeat count to find the ceiling; the error message usually states the limit. Adjust model names to what `/v1/models` returned. If steps 1 to 5 pass from inside the dev container but Cline fails, compare headers, model ID, and the presence of a `tools` array in the request logs.
 
+## Bring-up ladder: which endpoint to point Cline at
+
+Plain gloss: try the simplest working endpoint first, and move to the proper
+one when it exists. At each rung, run the probes above *from the same place
+Cline runs* (the dev container) before touching Cline settings.
+
+| Rung | Base URL | When | Watch out for |
+|---|---|---|---|
+| 1. Inference service run locally | `http://localhost:<port>/v1` (start it with `uv run ...` per its README/Tiltfile) | Day one; no gateway needed | It may need its own env vars pointing at the NIMs; check `.env.example` |
+| 2. Inference service in your dev namespace | Tilt or `kubectl port-forward svc/<svc> <port>:<port>` → `http://localhost:<port>/v1` | Once Tilt deploys it | Port-forwards drop when pods restart; re-run |
+| 3. NIM directly | `kubectl port-forward svc/<nim-svc> 8000:8000` → `http://localhost:8000/v1` | Only with explicit permission | No key check and no usage tracking; you are sharing someone's GPUs. Ask first |
+| 4. The gateway | `https://<gateway-host>/v1` (or the gateway's OpenAI-compatible path) | When the gateway is live | Key header (doc 06: `x-bf-vk` vs Bearer), model name prefix, buffering at the ingress |
+
+Rule of thumb: if the probes pass and Cline fails, it's a Cline setting (model
+ID, context window, max output). If the probes fail, it's the endpoint, and
+Cline was never the problem.
+
+Fallback when nothing works yet: use the chat portal itself on one file at a
+time (paste a function, ask for a trace with line citations, explain it back).
+Don't paste secrets or `.env` files, and remember the portal may store
+conversations.
+
 ## Proxies, certificates and gateways
 
 - VS Code extension: per Cline docs, the extension "uses VS Code's built-in proxy settings". The VS Code network page says proxy support comes from Chromium, the OS trust store is used for certificates, and that extensions "don't yet get the same proxy support as VS Code itself" (tracked in a GitHub issue). For a private CA, the preferred fix is adding it to the OS trust store of the machine where the extension runs, which for a dev container means the container. `http.proxyStrictSSL=false` is described as not recommended for production.
