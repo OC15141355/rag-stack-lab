@@ -19,6 +19,13 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 `modules/` as they are built and validated. The plan is in
 [the design spec](docs/superpowers/specs/2026-11-13-rag-stack-lab-design.md).
 
+## Investigation kit
+
+[docs/investigation/](docs/investigation/README.md): a kit for investigating a move from an existing NIM
+deployment to NVIDIA's operator-based approach. It has a question bank, current-state template,
+research on NVIDIA's current guidance and the NeMo stores, gap analysis, risk register and the
+recommendation document template. Personal pages are in [docs/notes/](docs/notes/).
+
 ## Pre-reading index
 
 | # | Document | Stage |
