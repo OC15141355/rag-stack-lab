@@ -1,0 +1,60 @@
+{
+  "environment": "prod",
+  "models": [
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "streaming",
+        "tools"
+      ],
+      "context_window": 131072,
+      "deployment": {
+        "image": "registry.example.internal/nim/glm-5-2:1.0.0-rc1",
+        "nim_profile": "vllm-fp8-tp8-PLACEHOLDER",
+        "nim_tag": "1.0.0-rc1"
+      },
+      "description": "Large general-purpose reasoning model for chat and coding agents.",
+      "display_name": "GLM 5.2",
+      "family": "glm",
+      "gateway_model": "nim-glm-5-2/glm-5.2",
+      "id": "glm-5-2",
+      "limits": {
+        "budget_usd_per_month": 500,
+        "requests_per_minute": 30,
+        "tokens_per_minute": 120000
+      },
+      "max_output_tokens": 16384,
+      "owner": "platform-models",
+      "status": "active"
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "streaming",
+        "tools"
+      ],
+      "context_window": 262144,
+      "deployment": {
+        "image": "registry.example.internal/nim/nemotron-3-super:1.1.0",
+        "nim_profile": "vllm-bf16-tp4-PLACEHOLDER",
+        "nim_tag": "1.1.0"
+      },
+      "description": "Mid-size reasoning and tool-calling model for agents and RAG answers.",
+      "display_name": "Nemotron 3 Super",
+      "family": "nemotron",
+      "gateway_model": "nim-nemotron-3-super/nemotron-3-super",
+      "id": "nemotron-3-super",
+      "limits": {
+        "budget_usd_per_month": 50,
+        "requests_per_minute": 120,
+        "tokens_per_minute": 300000
+      },
+      "max_output_tokens": 32768,
+      "owner": "platform-models",
+      "status": "active"
+    }
+  ],
+  "schema_version": 1
+}

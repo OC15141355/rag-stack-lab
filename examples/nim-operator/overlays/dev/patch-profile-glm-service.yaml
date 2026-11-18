@@ -1,0 +1,12 @@
+- op: replace
+  path: /spec/storage/nimCache/profile
+  value: REPLACE_WITH_DEV_PROFILE_ID_NVFP4_TP4   # PLACEHOLDER; must be the same id as the cache patch
+- op: replace
+  path: /spec/resources/requests/nvidia.com~1gpu
+  value: 4
+- op: replace
+  path: /spec/resources/limits/nvidia.com~1gpu
+  value: 4
+- op: replace
+  path: /spec/nodeSelector/nvidia.com~1gpu.product
+  value: NVIDIA-B200             # check against the real GFD label value

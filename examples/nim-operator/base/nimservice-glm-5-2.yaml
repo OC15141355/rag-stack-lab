@@ -1,0 +1,70 @@
+# NIMService for the large model. One replica = one whole 8x H200 node (TP8, single node, no multiNode block).
+# Field names checked against k8s-nim-operator v3.1.4, api/apps/v1alpha1/{nimservice,common}_types.go.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata:
+  name: glm-5-2
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app.kubernetes.io/name: glm-5-2
+    app.kubernetes.io/component: nim-llm
+    app.kubernetes.io/part-of: llm-serving
+spec:
+  image:
+    repository: harbor.example.internal/nim/zai-org/glm-5.2   # PLACEHOLDER repo
+    tag: "1.0.0"                                               # PLACEHOLDER; identical in every environment
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - harbor-pull
+  # spec.labels are merged onto the pods; the NetworkPolicy selects on this label (nimservice_types.go GetServiceLabels).
+  labels:
+    app.kubernetes.io/component: nim-llm
+  # authSecret omitted: with a pre-populated cache the NIM never contacts NGC.
+  storage:
+    nimCache:
+      name: glm-5-2
+      # Pinned profile. Sets NIM_MODEL_PROFILE on the pod (internal/controller/platform/standalone/nimservice.go:407-441).
+      profile: REPLACE_WITH_PROFILE_ID_FP8_TP8_H200   # PLACEHOLDER
+    readOnly: true
+    sharedMemorySizeLimit: 64Gi    # UNVERIFIED value; no NVIDIA figure found for this model
+  resources:
+    requests:
+      cpu: "32"
+      memory: 512Gi
+      nvidia.com/gpu: 8
+    limits:
+      memory: 512Gi
+      nvidia.com/gpu: 8
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-H200   # GPU Feature Discovery label; check value on the real nodes
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  replicas: 1
+  userID: 1000
+  groupID: 2000
+  # The operator default is failureThreshold 120 x period 10s = 20 min after a 30 s delay
+  # (nimservice_types.go GetDefaultStartupProbe). Loading ~750 GB can exceed that, so allow 1 h.
+  startupProbe:
+    enabled: true
+    probe:
+      httpGet:
+        path: /v1/health/ready
+        port: api
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 360
+  expose:
+    service:
+      type: ClusterIP
+      port: 8000
+  metrics:
+    enabled: true
+    serviceMonitor:
+      additionalLabels:
+        release: kube-prometheus-stack   # PLACEHOLDER: whatever label your Prometheus selects on
+      interval: 30s
+      scrapeTimeout: 10s

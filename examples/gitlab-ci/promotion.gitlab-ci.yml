@@ -1,0 +1,126 @@
+# Promotion pipeline: validate -> generate-check -> deploy-dev -> smoke-dev
+#                     -> promote-qa (manual) -> smoke-qa -> promote-prod (manual)
+#
+# Promotion = a merge request that changes pinned versions (nim_tag / nim_profile)
+# for one environment in examples/model-catalogue/catalogue.yaml. Nothing here
+# builds models; it validates, regenerates gateway config, applies it, and tests.
+#
+# AUDIT TRAIL: MR approvals (who approved what diff) + the GitLab deployment log
+# for each environment (who triggered, when, which commit) + job logs of the
+# smoke tests. No separate audit database is needed.
+#
+# --- PATTERN A: environment branches ----------------------------------------
+# Long-lived branches dev, qa, prod. Promotion = MR from dev to qa, then qa to
+# prod. Protect each branch (Settings > Repository > Protected branches) so
+# only maintainers merge and force-push is off. The rules below use
+# $CI_COMMIT_BRANCH.
+#
+# NOTE on `needs:` — it only links jobs inside ONE pipeline. With Pattern B
+# (single ref) the whole chain is one pipeline and `needs` gates it directly.
+# With Pattern A each branch has its own pipeline, so delete the cross-branch
+# `needs` lines and gate with the MR instead (approval rule + "pipelines must
+# succeed" on the qa->prod MR, so prod cannot merge unless smoke-qa passed).
+# --- PATTERN B: directory-per-env on main (shown in comments) ----------------
+# One branch (main). Each env has its own pin file, e.g. envs/qa/pins.yaml, and
+# promotion = an MR editing that env's file. Use CODEOWNERS per directory for
+# approvers, and rules:changes to run only the env that changed, e.g.
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "main"'
+#       changes: ["envs/qa/**/*"]
+# The environment: / protected-environment parts are identical in both patterns.
+#
+# Protected environments (Settings > CI/CD > Protected environments): set
+# "qa" and "prod" with Allowed to deploy = a small role/group and, for prod,
+# Required approvals >= 1 (Premium/Ultimate; UNVERIFIED tier). Manual jobs
+# targeting a protected environment can only be run by allowed users.
+#
+# Variables (masked, protected, scoped per environment): GATEWAY_URL for each
+# env, e.g. GATEWAY_URL scoped to environment dev / qa / prod, plus the
+# smoke-test virtual key SMOKE_VK. Deploy mechanics (kubectl / argocd / ansible)
+# are placeholders; swap in the repo's real delivery tool.
+
+stages: [validate, generate-check, deploy-dev, smoke-dev, promote-qa, smoke-qa, promote-prod]
+
+default:
+  image: registry.example.internal/ci/python:3.12   # PLACEHOLDER mirrored image
+  before_script:
+    - pip install --no-cache-dir pyyaml==6.*          # or mirror via internal index
+
+variables:
+  CATALOGUE_DIR: examples/model-catalogue
+  MODEL_LIST: "nim-glm-5-2/glm-5.2 nim-nemotron-3-super/nemotron-3-super"
+
+# Pattern A: pipeline runs on env branches and on MRs targeting them.
+# Pattern B: replace with  - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+.on-pipeline: &on-pipeline
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  - if: '$CI_COMMIT_BRANCH =~ /^(dev|qa|prod)$/'
+
+validate:
+  stage: validate
+  rules: *on-pipeline
+  script:
+    - python $CATALOGUE_DIR/generate.py --env all --out "$(mktemp -d)"   # validates; fails on bad catalogue
+
+generate-check:
+  stage: generate-check
+  rules: *on-pipeline
+  script:
+    - python $CATALOGUE_DIR/generate.py --env all --check   # fails if committed out/ drifted
+
+deploy-dev:
+  stage: deploy-dev
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'                # Pattern B: main + changes: envs/dev/**
+  environment: { name: dev }
+  script:
+    - echo "apply $CATALOGUE_DIR/out/dev/bifrost-providers.json to the dev gateway"   # PLACEHOLDER
+    - echo "NIMService/NIMCache pins for dev come from the catalogue (nim_tag, nim_profile)"
+
+smoke-dev:
+  stage: smoke-dev
+  needs: [deploy-dev]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+  environment: { name: dev, action: verify }
+  variables: { NIM_OR_GATEWAY_URL: "$GATEWAY_URL" }
+  script:
+    - for MODEL in $MODEL_LIST; do python examples/smoke/smoke.py --base-url "$NIM_OR_GATEWAY_URL" --model "$MODEL"; done
+
+promote-qa:
+  stage: promote-qa
+  needs: [smoke-dev]                                  # Pattern A: remove (job is on another branch's pipeline); the MR gate replaces it
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "qa"'                 # Pattern A: runs after the dev->qa MR merges
+      when: manual
+      allow_failure: false
+  environment: { name: qa }                           # protected environment: approvers only
+  script:
+    - echo "apply $CATALOGUE_DIR/out/qa/bifrost-providers.json to the qa gateway"          # PLACEHOLDER
+    - echo "roll NIMService pins for qa; wait for Ready"                                   # PLACEHOLDER
+
+smoke-qa:
+  stage: smoke-qa
+  needs: [promote-qa]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "qa"'
+  environment: { name: qa, action: verify }
+  variables: { NIM_OR_GATEWAY_URL: "$GATEWAY_URL" }   # value scoped to environment qa
+  script:
+    - for MODEL in $MODEL_LIST; do python examples/smoke/smoke.py --base-url "$NIM_OR_GATEWAY_URL" --model "$MODEL"; done
+
+promote-prod:
+  stage: promote-prod
+  needs: [smoke-qa]                                   # works in one pipeline (Pattern B). Pattern A: remove this line; across branches,
+                                                      # also require a green smoke-qa on the commit being
+                                                      # promoted: the prod MR is only mergeable if the
+                                                      # qa branch's last pipeline passed (merge request
+                                                      # approval rule + "pipelines must succeed").
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "prod"'
+      when: manual
+      allow_failure: false
+  environment: { name: prod }                         # protected: approvers + required approvals
+  script:
+    - echo "apply $CATALOGUE_DIR/out/prod/bifrost-providers.json to the prod gateway"      # PLACEHOLDER
+    - echo "roll NIMService pins for prod; wait for Ready"                                 # PLACEHOLDER

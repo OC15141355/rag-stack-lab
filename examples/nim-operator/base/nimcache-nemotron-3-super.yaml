@@ -1,0 +1,39 @@
+# NIMCache for Nemotron 3 Super 120B-A12B.
+# Field names checked against k8s-nim-operator v3.1.4, api/apps/v1alpha1/nimcache_types.go.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMCache
+metadata:
+  name: nemotron-3-super
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    app.kubernetes.io/name: nemotron-3-super
+    app.kubernetes.io/component: nim-cache
+    app.kubernetes.io/part-of: llm-serving
+spec:
+  source:
+    ngc:
+      modelPuller: harbor.example.internal/nim/nvidia/nemotron-3-super-120b-a12b:1.0.0   # PLACEHOLDER repo and tag
+      pullSecret: harbor-pull
+      authSecret: ngc-api-key
+      model:
+        profiles:
+          - REPLACE_WITH_PROFILE_ID_NEMOTRON_SUPER   # PLACEHOLDER
+  storage:
+    pvc:
+      create: true
+      storageClass: REPLACE_IN_OVERLAY
+      size: 512Gi             # UNVERIFIED sizing for a 120B-parameter checkpoint plus headroom
+      volumeAccessMode: ReadWriteMany
+  resources:
+    cpu: "4"
+    memory: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  userID: 1000
+  groupID: 2000

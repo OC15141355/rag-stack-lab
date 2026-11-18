@@ -1,0 +1,118 @@
+{
+  "_environment": "dev",
+  "_generated": "DO NOT EDIT. Source: examples/model-catalogue/catalogue.yaml",
+  "governance": {
+    "budgets_by_provider": [
+      {
+        "id": "budget-dev-glm-5-2",
+        "max_limit": 200,
+        "provider": "nim-glm-5-2",
+        "reset_duration": "1M"
+      },
+      {
+        "id": "budget-dev-nemotron-3-super",
+        "max_limit": 50,
+        "provider": "nim-nemotron-3-super",
+        "reset_duration": "1M"
+      }
+    ],
+    "rate_limits": [
+      {
+        "id": "rl-dev-glm-5-2",
+        "request_max_limit": 120,
+        "request_reset_duration": "1m",
+        "token_max_limit": 60000,
+        "token_reset_duration": "1m"
+      },
+      {
+        "id": "rl-dev-nemotron-3-super",
+        "request_max_limit": 60,
+        "request_reset_duration": "1m",
+        "token_max_limit": 100000,
+        "token_reset_duration": "1m"
+      }
+    ],
+    "virtual_keys_template": [
+      {
+        "is_active": true,
+        "name": "default-dev",
+        "provider_configs": [
+          {
+            "allowed_models": [
+              "glm-5.2"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nim-glm-5-2",
+            "rate_limit_id": "rl-dev-glm-5-2",
+            "weight": 1.0
+          },
+          {
+            "allowed_models": [
+              "nemotron-3-super"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nim-nemotron-3-super",
+            "rate_limit_id": "rl-dev-nemotron-3-super",
+            "weight": 1.0
+          }
+        ]
+      }
+    ]
+  },
+  "providers": {
+    "nim-glm-5-2": {
+      "custom_provider_config": {
+        "allowed_requests": {
+          "chat_completion": true,
+          "chat_completion_stream": true
+        },
+        "base_provider_type": "openai"
+      },
+      "keys": [
+        {
+          "models": [
+            "glm-5.2"
+          ],
+          "name": "nim-glm-5-2-key",
+          "value": "env.NIM_DUMMY_KEY",
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://nim-glm-5-2.nim-dev.svc:8000/v1",
+        "default_request_timeout_in_seconds": 600,
+        "max_retries": 1,
+        "stream_idle_timeout_in_seconds": 300
+      }
+    },
+    "nim-nemotron-3-super": {
+      "custom_provider_config": {
+        "allowed_requests": {
+          "chat_completion": true,
+          "chat_completion_stream": true
+        },
+        "base_provider_type": "openai"
+      },
+      "keys": [
+        {
+          "models": [
+            "nemotron-3-super"
+          ],
+          "name": "nim-nemotron-3-super-key",
+          "value": "env.NIM_DUMMY_KEY",
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://nim-nemotron.nim-dev.svc:8000/v1",
+        "default_request_timeout_in_seconds": 600,
+        "max_retries": 1,
+        "stream_idle_timeout_in_seconds": 300
+      }
+    }
+  }
+}

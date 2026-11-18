@@ -1,0 +1,29 @@
+# PVCs filled out-of-band (copy from a connected cluster or the storage array), owned by GitOps, never pruned.
+# Ownership of the files must match NIM userID/groupID 1000/2000 or the NIM fails with permission errors.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nim-cache-glm-5-2
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: qa-rwx-fast       # PLACEHOLDER
+  resources:
+    requests:
+      storage: 1536Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nim-cache-nemotron-3-super
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: qa-rwx-fast
+  resources:
+    requests:
+      storage: 512Gi

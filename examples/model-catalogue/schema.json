@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model catalogue",
+  "type": "object",
+  "required": ["schema_version", "models"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "defaults": { "type": "object", "properties": { "limits": { "$ref": "#/$defs/limits" } }, "additionalProperties": false },
+    "models": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/model" } }
+  },
+  "$defs": {
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_minute": { "type": "integer", "minimum": 1 },
+        "tokens_per_minute": { "type": "integer", "minimum": 1 },
+        "budget_usd_per_month": { "type": "number", "minimum": 0 }
+      }
+    },
+    "env": {
+      "type": "object",
+      "required": ["enabled", "nim_tag", "nim_profile", "endpoint"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "nim_tag": { "type": "string", "minLength": 1, "not": { "const": "latest" } },
+        "nim_profile": { "type": "string", "minLength": 1 },
+        "endpoint": { "type": "string", "pattern": "^https?://" },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["id", "display_name", "description", "family", "owner", "status", "nim",
+                   "context_window", "max_output_tokens", "capabilities", "environments"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["active", "deprecated", "retired"] },
+        "nim": {
+          "type": "object",
+          "required": ["image", "model_name"],
+          "additionalProperties": false,
+          "properties": { "image": { "type": "string" }, "model_name": { "type": "string" } }
+        },
+        "context_window": { "type": "integer", "minimum": 1 },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "capabilities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["chat", "streaming", "tools", "reasoning", "vision", "embeddings", "json_mode"] }
+        },
+        "limits": { "$ref": "#/$defs/limits" },
+        "environments": {
+          "type": "object",
+          "required": ["dev", "qa", "prod"],
+          "additionalProperties": false,
+          "properties": { "dev": { "$ref": "#/$defs/env" }, "qa": { "$ref": "#/$defs/env" }, "prod": { "$ref": "#/$defs/env" } }
+        }
+      }
+    }
+  }
+}

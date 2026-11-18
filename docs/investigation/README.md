@@ -22,6 +22,12 @@ hostnames, configs and findings about a specific platform go in your
 | 05 | [Gap analysis](05-gap-analysis.md) | Framework plus a generic draft: current vs recommended, item-by-item | Yes (private copy) |
 | 06 | [Risks and constraints](06-risks-and-constraints.md) | Risk register, pre-filled with the generic risks | Yes (private copy) |
 | 07 | [Recommendation document template](07-recommendation-template.md) | The structure of the final document and the one-page team summary | Yes (private) |
+| 08 | [Target-state reference](08-target-state-reference.md) | NIMCache/NIMService manifests (field names checked against operator v3.1.4 CRDs), kustomize overlays per env, Argo health checks, NetworkPolicy | Read; adapt examples |
+| 09 | [Model catalogue and promotion](09-model-catalogue-and-promotion.md) | Design + runnable examples: metadata catalogue, generated gateway config, MR-based promotion | Read; adapt examples |
+| 10 | [Smoke tests as promotion gates](10-smoke-tests.md) | Stdlib-only test script for any OpenAI-compatible endpoint (tested against a mock) | Run it |
+| 11 | [Decision record draft](11-decision-record-draft.md) | ADR for the "serve via NIM Operator, don't build on deprecated NeMo CRDs" decision | Yes (private) |
+| 12 | [Cutover and rollback runbook](12-cutover-runbook-template.md) | Per-environment cutover template with rollback | Yes (private) |
+| 13 | [Questions for NVIDIA](13-questions-for-nvidia.md) | For the account team / support: direction, models, air-gap, planned features | Send |
 
 Personal pages, for you rather than the team:
 

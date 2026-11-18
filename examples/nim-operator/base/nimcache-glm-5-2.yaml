@@ -1,0 +1,51 @@
+# NIMCache for the large model (GLM 5.2 class, ~750B, FP8, TP8 on 8x H200).
+# Field names checked against k8s-nim-operator v3.1.4, api/apps/v1alpha1/nimcache_types.go.
+# Every value marked PLACEHOLDER must be replaced from the real NGC catalogue entry before use.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMCache
+metadata:
+  name: glm-5-2
+  annotations:
+    # Cache first, service second (see examples/argocd/nim-health.lua.md).
+    argocd.argoproj.io/sync-wave: "0"
+    # Never prune the cache and never delete it when the Application is deleted.
+    # The operator-created PVC is owned by this object, so keeping this object keeps the weights.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    app.kubernetes.io/name: glm-5-2
+    app.kubernetes.io/component: nim-cache
+    app.kubernetes.io/part-of: llm-serving
+spec:
+  source:
+    ngc:
+      # modelPuller is immutable once set (CEL rule on the CRD). Changing it means a NEW NIMCache.
+      # In the air gap this is the same mirrored NIM image the service runs.
+      modelPuller: harbor.example.internal/nim/zai-org/glm-5.2:1.0.0   # PLACEHOLDER repo and tag
+      pullSecret: harbor-pull
+      # authSecret is only for sites where the cache job may reach NGC (DEV). QA/PROD overlays remove it.
+      authSecret: ngc-api-key
+      model:
+        # Pin the exact profile id (from `list-model-profiles` or the NGC model card).
+        # When profiles is set, the other selectors (engine, precision, tensorParallelism, gpus) are ignored.
+        profiles:
+          - REPLACE_WITH_PROFILE_ID_FP8_TP8_H200   # PLACEHOLDER
+  storage:
+    pvc:
+      create: true
+      # storageClass and size are set per environment in the overlays.
+      storageClass: REPLACE_IN_OVERLAY
+      size: 1536Gi            # ~750 GB of weights plus headroom. UNVERIFIED sizing.
+      volumeAccessMode: ReadWriteMany
+  resources:                  # the caching job only, not the serving pod
+    cpu: "4"
+    memory: 16Gi
+  # The cache job does not request a GPU. If nodeSelector is nil the operator defaults to the NFD label
+  # feature.node.kubernetes.io/pci-10de.present=true (nimcache_types.go GetNodeSelectors).
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  userID: 1000
+  groupID: 2000

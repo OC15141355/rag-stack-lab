@@ -1,0 +1,79 @@
+# Model catalogue: the single source of truth for model metadata.
+# Edit this file in a merge request. Never edit out/ by hand (CI fails on drift).
+# Values marked PLACEHOLDER are illustrative and must be replaced from the
+# vendor's model card / NIM support matrix before use.
+schema_version: 1
+
+# Defaults apply to every model unless the model or an env overrides them.
+defaults:
+  limits:
+    requests_per_minute: 60
+    tokens_per_minute: 100000
+    budget_usd_per_month: 50      # gateway budget unit is dollars; PLACEHOLDER
+
+models:
+  - id: glm-5-2                                   # stable catalogue id (slug)
+    display_name: GLM 5.2                         # PLACEHOLDER name
+    description: Large general-purpose reasoning model for chat and coding agents.
+    family: glm
+    owner: platform-models                        # a role/mailbox, not a person
+    status: active                                # active | deprecated | retired
+    nim:
+      image: registry.example.internal/nim/glm-5-2   # PLACEHOLDER mirror path
+      model_name: glm-5.2                         # id the NIM serves on /v1/models (PLACEHOLDER)
+    context_window: 131072                        # PLACEHOLDER; enforced by NIM max_model_len
+    max_output_tokens: 16384                      # PLACEHOLDER
+    capabilities: [chat, streaming, tools, reasoning]
+    limits:                                       # default for this model
+      requests_per_minute: 30
+      tokens_per_minute: 60000
+      budget_usd_per_month: 200
+    environments:
+      dev:
+        enabled: true
+        nim_tag: "1.0.0-rc2"                      # PLACEHOLDER tag
+        nim_profile: "vllm-fp8-tp8-PLACEHOLDER"   # pinned profile name
+        endpoint: http://nim-glm-5-2.nim-dev.svc:8000/v1
+        limits: { requests_per_minute: 120 }      # looser in dev
+      qa:
+        enabled: true
+        nim_tag: "1.0.0-rc1"
+        nim_profile: "vllm-fp8-tp8-PLACEHOLDER"
+        endpoint: http://nim-glm-5-2.nim-qa.svc:8000/v1
+      prod:
+        enabled: true
+        nim_tag: "1.0.0-rc1"
+        nim_profile: "vllm-fp8-tp8-PLACEHOLDER"
+        endpoint: http://nim-glm-5-2.nim-prod.svc:8000/v1
+        limits: { tokens_per_minute: 120000, budget_usd_per_month: 500 }
+
+  - id: nemotron-3-super
+    display_name: Nemotron 3 Super               # PLACEHOLDER name
+    description: Mid-size reasoning and tool-calling model for agents and RAG answers.
+    family: nemotron
+    owner: platform-models
+    status: active
+    nim:
+      image: registry.example.internal/nim/nemotron-3-super   # PLACEHOLDER
+      model_name: nemotron-3-super                # PLACEHOLDER
+    context_window: 262144                        # PLACEHOLDER
+    max_output_tokens: 32768                      # PLACEHOLDER
+    capabilities: [chat, streaming, tools, reasoning]
+    # no model-level limits: inherits defaults
+    environments:
+      dev:
+        enabled: true
+        nim_tag: "1.2.0"
+        nim_profile: "vllm-bf16-tp4-PLACEHOLDER"
+        endpoint: http://nim-nemotron.nim-dev.svc:8000/v1
+      qa:
+        enabled: true
+        nim_tag: "1.1.0"
+        nim_profile: "vllm-bf16-tp4-PLACEHOLDER"
+        endpoint: http://nim-nemotron.nim-qa.svc:8000/v1
+      prod:
+        enabled: true
+        nim_tag: "1.1.0"
+        nim_profile: "vllm-bf16-tp4-PLACEHOLDER"
+        endpoint: http://nim-nemotron.nim-prod.svc:8000/v1
+        limits: { requests_per_minute: 120, tokens_per_minute: 300000 }

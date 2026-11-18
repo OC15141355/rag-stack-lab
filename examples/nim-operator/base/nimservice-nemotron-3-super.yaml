@@ -1,0 +1,64 @@
+# NIMService for Nemotron 3 Super 120B-A12B.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata:
+  name: nemotron-3-super
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app.kubernetes.io/name: nemotron-3-super
+    app.kubernetes.io/component: nim-llm
+    app.kubernetes.io/part-of: llm-serving
+spec:
+  image:
+    repository: harbor.example.internal/nim/nvidia/nemotron-3-super-120b-a12b   # PLACEHOLDER repo
+    tag: "1.0.0"                                                                 # PLACEHOLDER; identical in every environment
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - harbor-pull
+  labels:
+    app.kubernetes.io/component: nim-llm
+  storage:
+    nimCache:
+      name: nemotron-3-super
+      profile: REPLACE_WITH_PROFILE_ID_NEMOTRON_SUPER   # PLACEHOLDER
+    readOnly: true
+    sharedMemorySizeLimit: 32Gi    # UNVERIFIED value
+  resources:
+    requests:
+      cpu: "16"
+      memory: 256Gi
+      nvidia.com/gpu: 2            # UNVERIFIED: must equal the tp of the pinned profile
+    limits:
+      memory: 256Gi
+      nvidia.com/gpu: 2
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-H200
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  replicas: 1
+  userID: 1000
+  groupID: 2000
+  startupProbe:
+    enabled: true
+    probe:
+      httpGet:
+        path: /v1/health/ready
+        port: api
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 180   # 30 min
+  expose:
+    service:
+      type: ClusterIP
+      port: 8000
+  metrics:
+    enabled: true
+    serviceMonitor:
+      additionalLabels:
+        release: kube-prometheus-stack   # PLACEHOLDER
+      interval: 30s
+      scrapeTimeout: 10s

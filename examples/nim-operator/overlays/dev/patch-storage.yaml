@@ -1,0 +1,7 @@
+# DEV downloads from NGC where the site allows it (authSecret kept from base).
+- op: replace
+  path: /spec/storage/pvc/storageClass
+  value: dev-rwx-fast          # PLACEHOLDER storage class name
+- op: replace
+  path: /spec/storage/pvc/size
+  value: 1536Gi

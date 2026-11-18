@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - pvc-prestaged.yaml
+patches:
+  # Air-gapped: caches point at pre-staged PVCs and carry no NGC key.
+  - path: patch-cache-prestaged-glm.yaml
+    target: {kind: NIMCache, name: glm-5-2}
+  - path: patch-cache-prestaged-nemotron.yaml
+    target: {kind: NIMCache, name: nemotron-3-super}
+  - path: patch-replicas-nemotron.yaml
+    target: {kind: NIMService, name: nemotron-3-super}

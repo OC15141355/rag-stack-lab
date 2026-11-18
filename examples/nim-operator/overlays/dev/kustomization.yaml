@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: patch-storage.yaml
+    target: {kind: NIMCache, name: glm-5-2}
+  - path: patch-storage-nemotron.yaml
+    target: {kind: NIMCache, name: nemotron-3-super}
+  # RISK: DEV hardware differs from QA/PROD, so DEV runs a DIFFERENT profile. See patch-profile-glm.yaml.
+  # Delete the next three entries if DEV has 8x H200 like QA and PROD.
+  - path: patch-profile-glm-cache.yaml
+    target: {kind: NIMCache, name: glm-5-2}
+  - path: patch-profile-glm-service.yaml
+    target: {kind: NIMService, name: glm-5-2}

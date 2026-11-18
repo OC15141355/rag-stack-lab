@@ -1,0 +1,7 @@
+# DEV-only profile override. Example assumes DEV has 4x B200 and runs the NVFP4 TP4 profile.
+# RISK: this is not the profile PROD runs. DEV proves manifests, probes, policies and the gateway path.
+# It does NOT prove memory fit, throughput, cold-start time or numerics for the PROD profile.
+# Model behaviour sign-off happens in QA, which must match PROD hardware and profile.
+- op: replace
+  path: /spec/source/ngc/model/profiles/0
+  value: REPLACE_WITH_DEV_PROFILE_ID_NVFP4_TP4   # PLACEHOLDER

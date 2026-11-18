@@ -1,0 +1,60 @@
+# One Application per environment. Each env points at its overlay; promotion is a merge request that
+# moves the same base change through dev -> qa -> prod (see docs/investigation/08-target-state-reference.md).
+# repoURL, cluster names, and the project are PLACEHOLDERS.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: nim-llm-serving
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: dev
+            cluster: dev-gpu-cluster
+            revision: main
+            auto: "true"
+          - env: qa
+            cluster: qa-gpu-cluster
+            revision: qa
+            auto: "false"
+          - env: prod
+            cluster: prod-gpu-cluster
+            revision: prod
+            auto: "false"
+  template:
+    metadata:
+      name: "nim-llm-{{ .env }}"
+      labels:
+        env: "{{ .env }}"
+    spec:
+      project: ai-platform
+      source:
+        repoURL: https://gitlab.example.internal/platform/nim-serving.git
+        # Per-environment tracking branches; promotion = fast-forward MR dev(main) -> qa -> prod.
+        targetRevision: "{{ .revision }}"
+        path: "examples/nim-operator/overlays/{{ .env }}"
+      destination:
+        name: "{{ .cluster }}"
+        namespace: nim-service
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=false
+          - ServerSideApply=true
+          # Caches are also protected per resource (Prune=false,Delete=false annotations in the manifests).
+          # Do NOT set Prune=true or Delete=true here.
+        retry:
+          limit: 3
+          backoff: {duration: 1m, factor: 2, maxDuration: 10m}
+  # DEV syncs automatically; QA and PROD sync only when a human presses sync (or a pipeline calls the API)
+  # after the MR is merged. templatePatch needs Argo CD 2.10 or later (UNVERIFIED for the installed version).
+  templatePatch: |
+    {{- if eq .auto "true" }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+    {{- end }}

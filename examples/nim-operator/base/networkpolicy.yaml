@@ -1,0 +1,66 @@
+# Only the gateway may reach the NIM API port. Prometheus may scrape the same port (/v1/metrics).
+# The operator labels NIMService pods with app=<NIMService name> (manifests/deployment.yaml in v3.1.4),
+# and copies spec.labels onto them, so this policy selects on the label set in the NIMService specs.
+# Namespace and pod labels of the gateway and Prometheus are PLACEHOLDERS for the local conventions.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nim-llm-ingress-from-gateway-and-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: nim-llm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: llm-gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Egress: DNS only. In the air gap a NIM with a warm cache needs nothing else.
+# Intra-pod GPU traffic (NCCL over NVLink) is not pod-network traffic.
+# If a DEV NIM must reach NGC, add a DEV-only egress patch rather than loosening this base.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nim-llm-egress-dns-only
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: nim-llm
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -1,0 +1,16 @@
+# UNVERIFIED: that the operator marks a NIMCache Ready on a pre-filled PVC with no NGC access.
+# It still renders a caching Job (internal/controller/nimcache_controller.go). Test in QA first.
+# Fallback if it fails: drop NIMCache and set NIMService spec.storage.pvc.name to this PVC, pin the
+# profile with spec.env NIM_MODEL_PROFILE (nimservice.go:413 uses an existing PVC directly).
+- op: replace
+  path: /spec/storage/pvc/create
+  value: false
+- op: add
+  path: /spec/storage/pvc/name
+  value: nim-cache-nemotron-3-super
+- op: remove
+  path: /spec/storage/pvc/storageClass
+- op: remove
+  path: /spec/storage/pvc/size
+- op: remove
+  path: /spec/source/ngc/authSecret
