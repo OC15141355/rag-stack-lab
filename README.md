@@ -44,6 +44,12 @@ Hands-on modules (lesson, runbook, checks, references) are added under
 | 19 | [Day-one field guide](docs/prereading/19-day-one-field-guide.md) | Method |
 | 20 | [How it fits together](docs/prereading/20-how-it-fits-together.md) | Whole system |
 | 21 | [Dev environment setup](docs/prereading/21-dev-environment-setup.md) | Dev loop |
+| 22 | [Deploying Bifrost on Kubernetes](docs/prereading/22-bifrost-deployment.md) | Runbook |
+| 23 | [Deploying the NIM Operator and NeMo microservices](docs/prereading/23-nemo-nim-operator-deployment.md) | Runbook |
+| 24 | [Clio-style insights: reading one and deploying one](docs/prereading/24-clio-pipeline-reading-and-deploying.md) | Insights |
+| 25 | [Using a chat portal as your coding assistant](docs/prereading/25-chat-portal-as-coding-assistant.md) | Method |
+| 26 | [Ansible and GitLab as infrastructure-as-code](docs/prereading/26-ansible-gitlab-iac.md) | Platform |
+| 27 | [Argo CD in an Ansible + GitLab shop](docs/prereading/27-argocd-in-an-ansible-gitlab-shop.md) | Platform |
 
 A blank [day-one notes template](templates/day-one-notes.md) is in `templates/`.
 Copy it somewhere private before filling it in.
