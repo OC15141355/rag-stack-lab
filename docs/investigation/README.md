@@ -28,6 +28,7 @@ hostnames, configs and findings about a specific platform go in your
 | 11 | [Decision record draft](11-decision-record-draft.md) | ADR for the "serve via NIM Operator, don't build on deprecated NeMo CRDs" decision | Yes (private) |
 | 12 | [Cutover and rollback runbook](12-cutover-runbook-template.md) | Per-environment cutover template with rollback | Yes (private) |
 | 13 | [Questions for NVIDIA](13-questions-for-nvidia.md) | For the account team / support: direction, models, air-gap, planned features | Send |
+| 14 | [Speech models (ASR/TTS) and the NIM Operator](14-speech-nims-under-the-operator.md) | Whisper/Parakeet/Magpie NIMs under `NIMService`; community Whisper vs NIM | Read |
 
 Personal pages, for you rather than the team:
 
