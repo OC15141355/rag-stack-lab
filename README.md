@@ -26,6 +26,12 @@ deployment to NVIDIA's operator-based approach. It has a question bank, current-
 research on NVIDIA's current guidance and the NeMo stores, gap analysis, risk register and the
 recommendation document template. Personal pages are in [docs/notes/](docs/notes/).
 
+## Project investigation
+
+[docs/project-investigation/](docs/project-investigation/): a worked investigation for a placeholder
+"Project". It has the master findings doc, a current-state fill-in sheet, and Confluence-ready page drafts
+in [confluence/](docs/project-investigation/confluence/README.md).
+
 ## Pre-reading index
 
 | # | Document | Stage |
