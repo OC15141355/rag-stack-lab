@@ -1,4 +1,4 @@
-# Appendix D: Glossary
+# Appendix C: Glossary
 
 | Term | Meaning |
 |---|---|
@@ -12,6 +12,9 @@
 | **NeMo Microservices** | NVIDIA's former suite (Entity Store, Data Store, Customizer, Evaluator, Guardrails). Sunset 2026-10-01 |
 | **Entity Store** | NeMo service holding records/pointers for namespaces, projects, models and datasets. Not a user/session store |
 | **Data Store** | NeMo service: a Hugging Face-compatible file store for datasets and fine-tuned models |
+| **Deployment Management** | NeMo service: an API to deploy, list, update and delete NIMs through the NIM Operator. Sunset with NeMo Microservices |
+| **NIM Proxy** | NeMo service: a single inference endpoint routing to all deployed NIMs. Sunset; Bifrost covers this role |
+| **Cache pre-populator** | The Project's manual step that fills model-cache PVCs before NIMs start |
 | **NeMo Helix** | Successor platform ("NeMo Platform"), pre-1.0 |
 | **Bifrost** | LLM gateway: keys, routing, rate/token limits, logging, in front of the NIMs |
 | **Model catalogue** | Proposed versioned file in git describing each model; generates gateway config |

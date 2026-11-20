@@ -28,9 +28,10 @@ recommendation document template. Personal pages are in [docs/notes/](docs/notes
 
 ## Project investigation
 
-[docs/project-investigation/](docs/project-investigation/): a worked investigation for a placeholder
-"Project". It has the master findings doc, a current-state fill-in sheet, and Confluence-ready page drafts
-in [confluence/](docs/project-investigation/confluence/README.md).
+[docs/project-investigation/confluence/](docs/project-investigation/confluence/README.md): the final
+Confluence page set for an investigation into moving a placeholder "Project" to NVIDIA's operator approach
+(summary, current state, NVIDIA approach, gap analysis and ticket assessment, Helix, risks, smoke tests,
+recommendation, decision record). Plus a current-state [return sheet](docs/project-investigation/return-template.md).
 
 ## Pre-reading index
 

@@ -1,6 +1,6 @@
-# Appendix C: Reference: Speech models under the NIM Operator
+# Appendix B: Speech models under the NIM Operator
 
-> **[MACRO: Page Properties]** Status DRAFT · Owner <you> · Checked 2026-11-19
+> **[MACRO: Page Properties]** Status DRAFT · Owner <author> · Checked 2026-11-19
 
 **Purpose:** how the Project's speech model (believed Whisper ASR) fits the operator migration.
 

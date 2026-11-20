@@ -113,6 +113,45 @@ git log --format='%h %ad %an %s' --date=short -15 -- $(grep -rl -E 'image:' --in
 
 ---
 
+## A+. New (from the operators folder and install notes)
+
+**A13. Are LLM services NIMService CRs or plain Deployments?**
+```sh
+grep -rln -E 'kind: (NIMService|NIMCache)' . | grep -v '^./.git'
+grep -rln -E 'kind: Deployment' . | xargs grep -l -i -E 'nim|nvcr' 2>/dev/null
+```
+```
+<paste>
+```
+
+**A14. Which NeMo microservices are deployed / configured?**
+```sh
+ls <operators>/nemo-deployment-management <operators>/nemo-deployment-management/charts 2>/dev/null
+grep -rn -iE 'entity-?store|data-?store|nim-?proxy|deployment-?management|customizer|evaluator|guardrail' --include='*.y*ml' . | cut -c1-160 | head -30
+```
+```
+<paste>
+```
+Does anything call Deployment Management / NIM Proxy / Entity Store today? → `<answer>`
+
+**A15. Operator versions and source of truth**
+```sh
+grep -rn -E 'version:|appVersion:|image:.*(k8s-nim-operator|gpu-operator)' <operators>/k8s-nim-operator <operators>/gpu-operator-v25.10.0 2>/dev/null | head
+git branch -a | head -20; git log --oneline -5 --all -- <operators>
+```
+```
+<paste>
+```
+Which branch is "real" for DEV / QA / PROD? → `<answer>`
+
+**A16. Cache pre-populator**
+```sh
+ls <path>/cache-prepopulator; sed -n 1,80p <path>/cache-prepopulator/*.yaml
+```
+```
+<paste>
+```
+
 ## B. Cluster (only if you have read access)
 
 ```sh

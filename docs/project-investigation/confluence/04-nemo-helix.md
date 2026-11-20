@@ -1,6 +1,6 @@
-# Appendix B: Reference: NeMo Helix
+# 4. NeMo Helix
 
-> **[MACRO: Page Properties]** Status DRAFT · Owner <you> · Checked 2026-11-19
+> **[MACRO: Page Properties]** Status DRAFT · Owner <author> · Checked 2026-11-19
 
 **Purpose:** what NeMo Helix is, so the team can judge it as an alternative to the deprecated NeMo microservices.
 
@@ -14,11 +14,18 @@
 - **Registry/metadata/promotion:** it has model entities and filesets, but no token-limit metadata, promotion stages or model-change audit trail were found.
 - **Migration from NeMo Microservices:** the only official guidance is "contact your NVIDIA account team"; one service-specific page exists (Evaluator). APIs moved to `/apis/<service>/v2/workspaces/{ws}/...`.
 
+## What it means for the Project's NeMo layer
+
+The Project runs NeMo microservices (including Deployment Management). Helix is where that functionality is
+going, but it's **a different architecture, not a version bump**: new APIs (`/apis/<service>/v2/workspaces/...`),
+its own way of launching NIMs, and no documented NIM Operator integration or air-gap path. There is no supported
+in-place upgrade from the Project's current NeMo services. NVIDIA's guidance is to contact the account team.
+
 ## Verdict for the Project
 
 | If the Project… | Then |
 |---|---|
-| only serves NIMs behind Bifrost | **Not yet.** Use the NIM Operator; revisit when Helix is GA |
+| only serves NIMs behind Bifrost | **Not yet.** Use NIM Operator CRs in git; freeze the NeMo layer; revisit when Helix is GA |
 | wants fine-tuning / evaluation workflows | **Time-boxed trial in DEV**, pinned version, thin integration |
 
 ## Questions for NVIDIA

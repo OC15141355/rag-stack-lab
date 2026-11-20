@@ -1,35 +1,34 @@
 # Appendix A: Evidence
 
-> **[MACRO: Page Properties]** Status DRAFT · Owner <you>
+> **[MACRO: Page Properties]** Status DRAFT · Owner <author>
 
-**Purpose:** the commands run, files read and sources checked behind each claim. Long outputs sit in
-**[MACRO: Expand]** blocks. Hostnames, IPs and tokens are redacted.
+**Purpose:** the sources behind each claim. Long outputs sit in **[MACRO: Expand]** blocks. Hostnames, IPs and
+tokens are redacted.
 
-## Current state (from the deployment repo and cluster)
+## Project (repos, team)
 
 | Claim | Evidence | Date |
 |---|---|---|
-| Models deployed as plain manifests | `<repo path @ commit>` | |
-| Replicas per model | `grep replicas:` output | |
-| Image tags per env | `grep image:` output | |
-| GPUs per model | `grep nvidia.com/gpu` output | |
-| Weights PVC size/class/mode | PVC manifest | |
-| Helper pod source and command | `<file>` | |
-| Speech model image and ports | `<file>` | |
-| How manifests are applied | `.gitlab-ci.yml` / playbook | |
-| GPU Operator present | `kubectl get pods -A \| grep gpu-operator` | |
-| Auth validated at Traefik | IngressRoute middlewares | |
+| 14-step install sequence with manual steps 2–4, 8 (partly), 9–11, 13 | Platform deployment notes in the deployment repo `<path>` | 2026-11-20 |
+| Operators vendored: gpu-operator-v25.10.0, k8s-nim-operator, nemo-deployment-management, opensearch-operator, opensearch-cluster | `<repo>/operators/` on branch `<branch>` | 2026-11-20 |
+| NIM Operator CRDs present (NIMCache, NIMService, NIMBuild, NIMPipeline, …) | `<repo>/…/crds/` | 2026-11-20 |
+| `nemo-common` chart (HPA, RBAC, Service templates) | `<repo>/…/nemo-deployment-management/charts/` | 2026-11-20 |
+| Cache pre-populator with RWX PVCs | `<repo>/…/cache-prepopulator/` | 2026-11-20 |
+| `NIM_SERVED_MODEL_NAME` = `chat/<model>` | LLM service manifests `<path>` | 2026-11-19 |
+| DEV/QA RC tags; PROD pinned | Team; manifests `<path>` | 2026-11-19 |
+| No gateway / rate limiting | Team | 2026-11-19 |
 
-> **[MACRO: Expand]** paste raw outputs here, one expand per command
+> **[MACRO: Expand]** raw command outputs from the return sheet, one per command
 
-## NVIDIA sources (checked 2026-11-19)
+## NVIDIA sources (checked 2026-11-19/20)
 
 | Claim | Source |
 |---|---|
 | NeMo Microservices sunset 2026-10-01; "all new development has moved to NeMo Platform" | https://archive.docs.nvidia.com/nemo/microservices/latest/ |
-| NIM Operator NeMo CRDs deprecated; Entity Store = "registration objects, or pointers, of the model data", "registry for the organizational entities, like namespaces and projects" | https://docs.nvidia.com/nim-operator/3.1.2/entity-store.html · v3.1.3 release notes |
-| `NIMService.spec.storage.pvc` (reuse existing PVC); `spec.replicas` | https://github.com/NVIDIA/k8s-nim-operator, tag v3.1.4, `api/apps/v1alpha1/nimservice_types.go` |
-| Rollout hard-coded `RollingUpdate`, `maxSurge: 0`, `maxUnavailable: 25%` | same repo, tag v3.1.4, `manifests/deployment.yaml` |
-| Riva TTS sample for the operator | same repo, tag v3.1.4, `config/samples/nim/serving/standalone/routers/grpcroutes/llm.yaml` |
+| Deployment Management: "Provides an API to deploy NIM on a Kubernetes cluster and manage them through the NIM Operator"; NIM Proxy: "unified endpoint"; Entity Store: "namespaces, projects, datasets, and models" | https://archive.docs.nvidia.com/nemo/microservices/25.9.0/about/index.html |
+| Deployment Management requires the NIM Operator; configures NIM Service `scale.hpa` | https://archive.docs.nvidia.com/nemo/microservices/25.9.0/set-up/deploy-as-microservices/deployment-management.html |
+| Operator NeMo CRDs deprecated; Entity Store = "registration objects, or pointers, of the model data" | https://docs.nvidia.com/nim-operator/3.1.2/entity-store.html · release notes v3.1.3 |
+| `NIMService.spec.storage.pvc`, `spec.replicas` | https://github.com/NVIDIA/k8s-nim-operator tag v3.1.4 `api/apps/v1alpha1/nimservice_types.go` |
+| Rollout `RollingUpdate`, `maxSurge: 0`, `maxUnavailable: 25%` | same repo, tag v3.1.4, `manifests/deployment.yaml` |
 | Helix versions 0.5–0.10, no GA statement, Studio "alpha" | https://docs.nvidia.com/nemo-helix |
-| NIM for LLMs supports Helm charts and the NIM Operator side by side | NIM for LLMs Kubernetes docs |
+| Speech NIMs (ports 9000/50051, `NIM_TAGS_SELECTOR`); Riva TTS operator sample | docs.nvidia.com/nim/speech/latest; operator tag v3.1.4 `config/samples/…/grpcroutes/llm.yaml` |
