@@ -20,6 +20,18 @@ and re-paste.
       └─ C Glossary
 ```
 
+## Supporting material elsewhere in this repo
+
+| Page | Backed by |
+|---|---|
+| 02 NVIDIA approach | [investigation/03](../../investigation/03-nvidia-recommended-deployment.md), [prereading/23](../../prereading/23-nemo-nim-operator-deployment.md) |
+| 03a Ticket assessment | [investigation/04](../../investigation/04-nemo-entity-and-data-store.md), [investigation/09](../../investigation/09-model-catalogue-and-promotion.md) |
+| 04 NeMo Helix | [prereading/28](../../prereading/28-nemo-helix.md) |
+| 06 Smoke tests | [investigation/10](../../investigation/10-smoke-tests.md), [examples/smoke](../../../examples/smoke/) |
+| 07 Recommendation | [investigation/08](../../investigation/08-target-state-reference.md) (target state), [investigation/12](../../investigation/12-cutover-runbook-template.md) (cutover) |
+| B Speech models | [investigation/14](../../investigation/14-speech-nims-under-the-operator.md) |
+| Open question Q6 (NVIDIA) | [investigation/13](../../investigation/13-questions-for-nvidia.md) |
+
 ## Mapping to the ticket's acceptance criteria
 
 | Acceptance criterion | Page |

@@ -7,9 +7,17 @@ deploy), across DEV, QA and PROD. It covers steps, prerequisites, gaps, risks
 and effort, and checks the planned work items against what NVIDIA's
 components actually do.
 
-This repo is public. Everything here is generic. Real names, ticket IDs,
-hostnames, configs and findings about a specific platform go in your
-**private** copy of the templates, never in this repo.
+Everything in this folder is generic. The worked, Project-specific version (placeholder name "Project") is in
+[../project-investigation/confluence/](../project-investigation/confluence/README.md). Keep real names, ticket IDs,
+hostnames and secrets out of the repo.
+
+### Relevance to the Project ticket
+
+| Files | Status for the Project ticket |
+|---|---|
+| 03, 04 | **Use**: research behind confluence pages 02 and 03a |
+| 08, 09, 10, 12, 13, 14 | **Use**: target state, catalogue/promotion, smoke tests, cutover, NVIDIA questions, speech |
+| 01, 02, 05, 06, 07, 11 | **Superseded** by the Project's confluence pages (kept as generic templates) |
 
 ## What's in the kit
 

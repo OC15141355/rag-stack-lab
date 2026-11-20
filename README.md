@@ -4,6 +4,40 @@ A personal lab for learning an NVIDIA-style enterprise chat and RAG stack on
 Kubernetes, end to end: what each part is, why it is there, how it is run, and
 the commands and references needed to work with it.
 
+## Working on the Project ticket? Start here
+
+The ticket: *investigate moving the Project's model deployment to the NVIDIA NeMo microservices operator
+approach (steps, prerequisites, gaps, risks, effort across DEV/QA/PROD; map to the five NeMo operator tickets).*
+
+**The deliverable** (paste into Confluence):
+- [docs/project-investigation/confluence/](docs/project-investigation/confluence/README.md): final page set, 00–08 + appendices
+- [docs/project-investigation/return-template.md](docs/project-investigation/return-template.md): current-state facts still to collect
+
+**Supporting research** (cite it, or read to defend the pages):
+
+| Need | Read |
+|---|---|
+| What NVIDIA recommends now, prerequisites, lifecycle | [investigation/03](docs/investigation/03-nvidia-recommended-deployment.md) |
+| What Entity Store / Data Store really do vs the tickets | [investigation/04](docs/investigation/04-nemo-entity-and-data-store.md) |
+| Deploying the NIM Operator and NeMo CRDs, step by step | [prereading/23](docs/prereading/23-nemo-nim-operator-deployment.md) |
+| NeMo Helix (successor) | [prereading/28](docs/prereading/28-nemo-helix.md) |
+| Target-state manifests (NIMService/NIMCache, overlays, Argo health, NetworkPolicy) | [investigation/08](docs/investigation/08-target-state-reference.md) + [examples/nim-operator](examples/nim-operator/), [examples/argocd](examples/argocd/) |
+| Model catalogue + promotion pipeline (metadata and promotion tickets) | [investigation/09](docs/investigation/09-model-catalogue-and-promotion.md) + [examples/model-catalogue](examples/model-catalogue/), [examples/gitlab-ci](examples/gitlab-ci/) |
+| Smoke tests (promotion gate) | [investigation/10](docs/investigation/10-smoke-tests.md) + [examples/smoke](examples/smoke/) |
+| Cutover / rollback per env | [investigation/12](docs/investigation/12-cutover-runbook-template.md) |
+| Questions for the NVIDIA account team | [investigation/13](docs/investigation/13-questions-for-nvidia.md) |
+| Speech (Whisper) under the operator | [investigation/14](docs/investigation/14-speech-nims-under-the-operator.md) |
+| Bifrost (where metadata/limits get enforced) | [prereading/06](docs/prereading/06-bifrost-llm-gateway.md), [prereading/22](docs/prereading/22-bifrost-deployment.md) |
+| The Ansible + GitLab + Argo context the automation work lands in | [prereading/26](docs/prereading/26-ansible-gitlab-iac.md), [prereading/27](docs/prereading/27-argocd-in-an-ansible-gitlab-shop.md) |
+| Background on NIM / NeMo microservices | [prereading/01](docs/prereading/01-nvidia-nim.md), [prereading/02](docs/prereading/02-nemo-microservices.md) |
+
+**Superseded for this ticket** (generic templates; the Project versions live in `confluence/`):
+investigation/01, 02, 05, 06, 07, 11.
+
+**Not relevant to this ticket:** the rest of the pre-reading (RAG Blueprint, NV-Ingest, OpenSearch, Neo4j, Clio,
+OpenTelemetry, Traefik, Tanzu, Volcano, Harbor, dev containers, Tilt, Cline, portal-as-assistant, day-one guides).
+It's for the wider stack.
+
 ## Start here
 
 1. Read [the map](docs/00-map/README.md). It shows the whole system and the
