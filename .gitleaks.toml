@@ -1,0 +1,33 @@
+title = "rag-stack-lab"
+
+[extend]
+useDefault = true
+
+# key prefix written KE[Y] so this file never matches itself
+[[rules]]
+id = "age-secret-key"
+description = "age secret key incl. PQ hybrid / lower-case variants"
+regex = '''(?i)AGE-SECRET-KE[Y]-[A-Z0-9-]*1[A-Z0-9]{20,}'''
+keywords = ["age-secret-key-"]
+
+[[rules]]
+id = "private-key-header"
+description = "PEM / ssh.com private-key header, no END marker required"
+regex = '''-{4,5} ?BEGIN [A-Z0-9 _-]*PRIVATE KEY'''
+keywords = ["private key"]
+
+[[rules]]
+id = "nvidia-api-key"
+description = "NVIDIA API / NGC personal key"
+regex = '''nvapi-[A-Za-z0-9_-]{20,}'''
+keywords = ["nvapi-"]
+
+[[rules]]
+id = "bifrost-virtual-key"
+description = "Bifrost virtual key"
+regex = '''sk-bf-[A-Za-z0-9_-]{8,}'''
+keywords = ["sk-bf-"]
+
+[allowlist]
+description = "age PUBLIC keys are not secrets; test fixtures build fake keys at runtime"
+regexes = ['''^age1[a-z0-9]{58}$''']

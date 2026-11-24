@@ -1,0 +1,33 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main, env/qa, env/prod]
+permissions:
+  contents: read
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: gitleaks (tree + full history)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9 \
+            git /repo --config /repo/.gitleaks.toml --no-banner --redact
+      - name: install gitleaks 8.30.0 (checksum-verified)
+        run: |
+          cd "$RUNNER_TEMP"
+          base=https://github.com/gitleaks/gitleaks/releases/download/v8.30.0
+          tgz=gitleaks_8.30.0_linux_x64.tar.gz
+          curl -fsSL -o "$tgz" "$base/$tgz"
+          curl -fsSL -o checksums.txt "$base/gitleaks_8.30.0_checksums.txt"
+          grep " $tgz\$" checksums.txt | sha256sum -c -
+          sudo tar -xzf "$tgz" -C /usr/local/bin gitleaks
+          gitleaks version
+      - uses: astral-sh/setup-uv@v6
+      - name: structural secrets check
+        run: uv run --with pyyaml python3 scripts/check_secrets.py
+      - name: unit tests
+        run: uv run --with pytest --with pyyaml --with jsonschema pytest -q
