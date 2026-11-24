@@ -1,177 +1,266 @@
 # raglab: a GitOps lab for NIM model management (Phase A design)
 
-Date: 2026-11-24 · Status: awaiting review
+Date: 2026-11-24 · Status: **revision 2 after Tier-1 review** (code-reviewer, devils-advocate, sops-guardian,
+fact-check: [2026-11-24-raglab-factcheck.md](2026-11-24-raglab-factcheck.md)) · awaiting owner review
 
 ## Purpose
 
 A small, separate, on-demand Kubernetes lab to practise the target state from the Project investigation
-(`docs/project-investigation/confluence/`) end to end:
+(`docs/project-investigation/confluence/`):
 
-- NIM Operator CRs (`NIMService`, `NIMCache`) managed by Argo CD, with custom health checks, sync waves and prune
-  protection;
+- NIM Operator CRs managed by Argo CD, with custom health checks, sync waves and prune protection;
 - Bifrost as the single gateway, configured from a git model catalogue, with per-environment limits;
-- DEV → QA → PROD promotion by pull request, gated by smoke tests;
-- a layered, automated bootstrap (Ansible) replacing the manual install steps seen in the Project.
+- DEV → QA → PROD promotion through git, with smoke-test evidence;
+- a layered, automated bootstrap replacing manual install steps.
 
-There's no local GPU. Phase A uses **NVIDIA-hosted NIM endpoints** (developer program). Phase B (separate spec) adds a
-rented GPU node so one `NIMService` actually runs.
+There's no local GPU. Phase A uses **NVIDIA-hosted NIM endpoints**. Phase B (separate spec) adds a rented GPU node.
 
 ## Non-goals (Phase A)
 
-RAG components (OpenSearch, ingestion), Keycloak SSO in front of Bifrost, dashboards, the GPU Operator, NeMo
-microservices (sunset; not used), and running any model locally.
+RAG components, SSO, dashboards, the GPU Operator, NeMo microservices, running a model, the tailnet, and NFS/RWX
+storage.
 
 ## Constraints
 
-- **Separate from the homelab cluster and its Argo CD.** No CRDs, AppProject changes or argocd-cm edits on the
-  homelab.
-- **Resource-wary host:** the Proxmox host also runs a homelab etcd member and has more vCPUs allocated than cores. The
-  lab must never compete with it and must not fill the host's over-committed thin pool.
-- **Public repo:** manifests live in this public repo. Secrets are SOPS-encrypted with a lab-only age key; no IPs,
-  tailnet names or keys in plaintext.
-- **NVIDIA developer program terms:** hosted API is for prototyping; self-hosted NIMs only for dev/test (Phase B).
+- **Separate** from the homelab cluster and its Argo CD (no CRDs, AppProjects or argocd-cm changes there).
+- **Resource-wary host (hv-01):**
+  - CPU: 6 physical cores, no SMT, and 10 vCPUs already allocated.
+  - It hosts an etcd member (k8s-ctrl).
+  - Storage: one DRAM-less NVMe carries root, the thin pool and swap. The thin pool is 72% full and over-committed;
+    the `pve` volume group has 16 GiB free.
+- **Public repo** is Argo's source. A merge to `main` must not equal control of the lab's secrets. No IPs, hostnames
+  of the tailnet, keys or employer data in plaintext.
+- NVIDIA developer program: hosted API under the API Trial Terms (read before publishing any benchmark numbers);
+  self-hosted NIMs for dev/test only (Phase B).
 
 ## Architecture
 
 ```
-rag-stack-lab (GitHub, public)  ──watched by──▶  Argo CD (in the lab cluster)
-  lab/                                             │
-                                                   ├─ raglab-system : NIM Operator (no GPU → controller only)
-                                                   ├─ raglab-dev    : Bifrost + NIM CRs (replicas 0) + smoke hook
-                                                   ├─ raglab-qa     : same, pinned
-                                                   └─ raglab-prod   : same, pinned
-Bifrost (each env) ──HTTPS──▶ integrate.api.nvidia.com/v1  (hosted NIMs, NVIDIA developer API key)
+GitHub rag-stack-lab (public, protected main, gitleaks + push protection)
+  lab/ ──watched by──▶ Argo CD (lab VM, slim, pinned ≥ 3.6.2)
+                          AppProject raglab (hand-applied, not in git sync)
+                          ├─ raglab-system      : NIM Operator (controller only)
+                          ├─ raglab-secrets     : SOPS → Secrets (CMP, fail-closed, SSA)
+                          ├─ raglab-<env>       : Bifrost + smoke PostSync hook        (dev/qa/prod)
+                          └─ raglab-nim-<env>   : NIMService ×2 (replicas 0), no hooks  (dev/qa/prod)
+Bifrost (each env) ──HTTPS 443──▶ integrate.api.nvidia.com/v1
 ```
 
 ### Host and cluster
 
-| Item | Choice | Why |
+| Item | Choice | Why (review ref) |
 |---|---|---|
-| VM | Proxmox host hv-01, **2 vCPU, 5 GiB RAM, 30 GiB disk** | Fits ~15 GiB free; small enough not to matter |
-| Disk | Proxmox `local` (directory) storage, **not** `local-lvm` | Thin pool is over-committed; a lab disk must not be able to fill it |
-| CPU priority | `cpuunits: 50` (default 100) + `cpulimit: 2` | Under contention the homelab control plane and etcd win |
-| Lifecycle | **On demand:** started for lab sessions, stopped after (`onboot: 0`) | Zero cost when idle |
-| OS | Ubuntu 24.04 cloud-init from the existing template | Matches homelab VMs |
-| Kubernetes | **k3s** single node (built-in Traefik + local-path); `nfs-client` provisioner for an RWX class | Light; Traefik matches the Project's ingress |
-| Network | LAN + tailnet (for Phase B node join); no public exposure | |
+| VM | hv-01, **2 vCPU, 5 GiB RAM**, `onboot: 0`, started for sessions, stopped after | RAM fits (~15 GiB available) |
+| Disk | **Dedicated thick LV `raglab` (14 GiB) in VG `pve`**, exposed as an LVM storage restricted to node hv-01; raw, fully allocated; **no snapshots** | Can't fill the thin pool or root fs (DA M1, CR M8) |
+| Disk IO | `mbps_wr=50`, `iops_wr=500` (tune after measuring) | etcd is fsync-sensitive; same NVMe (DA M8) |
+| CPU | `cpuunits: 50` (relative weight vs default 100). **No `cpulimit`** (a no-op on a 2-vCPU VM) | Wins for k8s-ctrl under contention only (DA M8, FC 20) |
+| Template | `qm clone 9001 --full --storage raglab` (never a linked clone onto the thin pool) | DA m1, CR M8 |
+| Backups | Lab VM **not** added to any vzdump job; stated here (jobs are VM-ID lists today) | SG M3, FC 21 |
+| OS / k8s | Ubuntu 24.04; **k3s pinned version**, install script fetched at a pinned tag + checksum; `--secrets-encryption`; Traefik bundled (v3); local-path only | SG M3, DA M6, FC 6/7 |
+| Network | LAN only. **No tailnet in Phase A.** No `--accept-routes` ever | DA B2, m8 |
 
-### Resource budget (target)
+**Precheck before each session:** hv-01 root fs ≥ 20 GiB free, host memory PSI and IO PSI ≈ 0.
+**Stop rule:** stop the lab VM if host IO PSI `some avg60` > 10, k8s-ctrl CPU steal > 10%, or any homelab etcd
+alarm/leader change during a session.
 
-| Component | Requests (CPU / mem) | Notes |
+### Resource budget (with chart defaults overridden)
+
+| Component | Requests / limits | Notes |
 |---|---|---|
-| k3s + Traefik + CoreDNS + local-path | ~0.3 / 0.8 GiB | |
-| Argo CD (no Dex, no HA, 1 repo-server, Redis) | ~0.3 / 0.9 GiB | ApplicationSet controller only if used |
-| NIM Operator controller | ~0.1 / 0.25 GiB | No GPU, so no NIM pods |
-| Bifrost × 3 | ~0.15 / 0.25 GiB each | SQLite, small PVC each |
-| Smoke Jobs | burst ~0.1 / 0.1 GiB | Short-lived |
-| **Total** | **~1.2 CPU / ~3 GiB** | Leaves headroom inside 2 vCPU / 5 GiB |
+| k3s + Traefik + CoreDNS + local-path | ~0.3 CPU / 0.8 GiB | |
+| Argo CD (no Dex, no notifications, no ApplicationSet controller, 1 repo-server + CMP sidecar, Redis with auth) | ~0.4 / 1.1 GiB | |
+| NIM Operator | 0.1–0.5 CPU / 128–256 MiB (chart default requests 500m; override) | pinned image digest, `pullPolicy: IfNotPresent` (chart default is `release-3.0` + `Always`) |
+| Bifrost × 3 | 0.1 CPU / 512 MiB request, 768 MiB limit each | docs-sized |
+| Smoke Jobs | 0.1 / 128 MiB, serialised | |
+| **Total** | **~1.3 CPU / ~3.8 GiB** | inside 2 vCPU / 5 GiB |
 
-Every workload sets requests and limits.
-
-## Repository layout (`lab/`)
+## Repository and gates (must exist before any secret)
 
 ```
+.gitignore                      secrets section ported from homelab-k8s (*.key, *.pem, age-key*.txt, .env*,
+                                kubeconfig*, k3s.yaml, lab/bootstrap/inventory.ini, *.dec, editor swap files,
+                                *secret* except **/secrets/*.sops.yaml)
+.gitleaks.toml                  homelab rules + age secret key (incl. PQ/lowercase) + private key header + nvapi-
+.sops.yaml                      ONE root file, ONE rule: path_regex ^lab/secrets/.*\.sops\.yaml$, lab recipient only,
+                                encrypted_regex ^(data|stringData)$ (K8s Secret manifests only)
+scripts/safety-check.sh         gitleaks (worktree + index) + structural check: every data/stringData leaf is ENC[…],
+                                every lab/secrets file has a sops block, out/** has no nvapi-/sk-bf- values
+scripts/pre-commit.sh           runs safety-check on staged blobs + message
+.github/workflows/ci.yml        on: pull_request (never pull_request_target): gitleaks (digest-pinned) on tree + PR
+                                range, structural check, kustomize build of every overlay, generate.py --check,
+                                smoke.py self-test against the mock, examples/smoke ↔ lab/smoke drift check
 lab/
-  README.md                       how to start/stop, bootstrap, promote, tear down
-  bootstrap/                      Ansible: layered install (see below)
-    inventory.example.ini
-    playbooks/{01-platform,02-foundation,03-handover}.yml
+  README.md                     session start/stop, bootstrap, promotion, rotation, teardown
+  bootstrap/                    Ansible (inventory.example only; real inventory gitignored)
   argocd/
-    root-app.yaml                 app-of-apps, hand-applied once by bootstrap
-    apps/                         Applications: nim-operator, secrets, env-dev, env-qa, env-prod
-    argocd-cm-health.yaml         Lua health checks for apps.nvidia.com NIMCache/NIMService
-  platform/
-    nim-operator/values.yaml      chart pinned (NIM Operator v3.1.4); GPU-less settings
-    nfs-provisioner/              RWX storage class (optional, Phase B cache)
-  catalogue/
-    catalogue.yaml                models, per-env limits/pins (from examples/model-catalogue)
-    generate.py                   → out/<env>/bifrost-config.json, models.json (committed; CI --check)
-  envs/
-    base/                         Bifrost Deployment/Service/ConfigMap, NetworkPolicy, NIMService/NIMCache, smoke hook
-    dev/  qa/  prod/              kustomize overlays: pins, limits, replicas, generated config
-  secrets/                        SOPS-encrypted: NVIDIA API key, Bifrost encryption key (per env)
-  .sops.yaml                      lab age recipient only
+    appproject-raglab.yaml      HAND-APPLIED by bootstrap; NOT under the root app's path
+    root-app.yaml               hand-applied once; path lab/argocd/apps
+    apps/                       raglab-system, raglab-secrets, raglab-{dev,qa,prod}, raglab-nim-{dev,qa,prod}
+  platform/nim-operator/values.yaml
+  catalogue/catalogue.yaml + generate.py   → writes lab/envs/<env>/generated/{bifrost-config.json,models.json}
+  envs/base/ + envs/{dev,qa,prod}/          kustomize; configMapGenerator (hash suffix → rollout)
+  nim/base/ + nim/{dev,qa,prod}/
+  smoke/smoke.py                copy of examples/smoke/smoke.py (CI drift check)
+  secrets/{dev,qa,prod}.sops.yaml          K8s Secret manifests only
 ```
 
-The repo's existing `examples/` (catalogue, smoke tests, NIM Operator manifests, Argo health checks) are the starting
-point; `lab/` is the live, synced version.
+**GitHub settings:** secret scanning + push protection + validity checks **on**; branch protection on `main` and on
+`env/qa`, `env/prod`: PR required, CI required, no force-push, no direct pushes (agents open PRs; the owner merges).
+**One-off:** gitleaks over the full existing history before the first secret commit.
+
+## Argo CD (bounded)
+
+- Installed by bootstrap with Helm, **pinned ≥ 3.6.2** (CVE-2026-42880 fixed in 3.2.11/3.3.9+; FC 1). Slim values.
+- **`argocd-cm` is set from Helm values at bootstrap**, including the Lua health checks. It is never synced from git
+  (DA B1, CR m5).
+- **AppProject `raglab`** (hand-applied, outside the root app's path), so a merge cannot widen it:
+  - `sourceRepos`: this repo only.
+  - destinations: `raglab-system`, `raglab-dev`, `raglab-qa`, `raglab-prod` only. **Not** `argocd` or `kube-system`.
+  - cluster whitelist: `Namespace`, and `CustomResourceDefinition` only for `apps.nvidia.com`. If the operator chart
+    needs ClusterRole/ClusterRoleBinding, enumerate them in the implementation plan with justification.
+  - namespace whitelist: explicit kinds only. No `Pod` or `DaemonSet` outside the charts' needs; deny hostPath via the
+    k3s Pod Security `restricted` label on `raglab-*` namespaces (the operator namespace gets `baseline`).
+- **SOPS CMP:** a plain `sops -d` + kustomize CMP, **no exec/alpha plugins**, fail-closed loop copied from homelab
+  (`exit 1` on any decrypt failure), selected by explicit `plugin.name` on `raglab-secrets` only. The age key is mounted
+  **read-only into the CMP sidecar only**. A repo-server NetworkPolicy allows egress to DNS + github.com:443 only.
+  Redis auth on.
+- Every Secret-rendering app uses `ServerSideApply=true`. **Handover probe** (each session): zero Secrets in `argocd`
+  or `raglab-*` carry `last-applied-configuration`.
+- Env apps: `SkipDryRunOnMissingResource=true` + `syncPolicy.retry` (CRDs arrive via raglab-system) (CR M7).
 
 ## Components
 
-**Bootstrap (Ansible, from the admin workstation).** It mirrors the Project's layers, automated:
-1. *Platform:* create VM settings checklist (manual Proxmox step, documented), install k3s pinned, install Argo CD
-   pinned (slim values), register the repo (public; no credentials), install the SOPS decryption plugin (CMP sidecar,
-   lab age key as a Secret created from a local file).
-2. *Foundation:* apply `argocd/root-app.yaml`. From here Argo CD owns everything, including the NIM Operator.
-3. *Handover check:* wait for all Applications Healthy; print the access commands.
+**NIM CRs (`raglab-nim-<env>`, no hooks).** One `NIMService` per stand-in model, `replicas: 0`,
+`spec.storage.emptyDir` (no PVC, no NIMCache, so no download and nothing to bind) (CR B2, FC 12). Health check Lua:
+`NotReady` with `spec.replicas == 0` → **Healthy** ("scaled to zero, Phase A"); `Ready` → Healthy; `Failed` →
+Degraded; otherwise Progressing (CR B1, FC 11). Kept in a separate app so its health can never block Bifrost's
+PostSync. Profile pins are not expressible without a NIMCache; they arrive in Phase B (CR m8).
 
-**NIM Operator.** Installed by Argo CD in `raglab-system`. No GPU Operator in Phase A. CRDs via `ServerSideApply=true`.
+**Bifrost (`raglab-<env>`).** Image **pinned by digest** (current release, Renovate PRs, no auto-merge).
+- **Config:** generated `config.json` (real Bifrost schema; `generate.py` rewritten, CR m6 / DA M3), mounted via
+  `configMapGenerator`, so a change rolls the pod. Deployment `strategy: Recreate` (SQLite on an RWO PVC with
+  local-path; consumer present, so it binds).
+- **Source of truth and auth:** `source_of_truth: config.json` (git wins over UI edits). `governance.auth_config`
+  enabled with admin credentials from the env Secret (FC 14).
+- **Inference:** `client.enforce_auth_on_inference: true`. **One virtual key per env**, value `env.BIFROST_VK` from
+  the Secret (FC 16). Custom OpenAI-compatible provider to `https://integrate.api.nvidia.com/v1` with
+  `env.NVIDIA_API_KEY`.
+- **Models:** `z-ai/glm-5.3-flash` and `nvidia/nemotron-3.5-lightning-30b-a3b`, with **aliases** `chat/glm`,
+  `chat/nemotron` (FC 15; verify routing without a default provider in the plan).
+- **Logging:** `disable_content_logging: true` (default is **off**, i.e. logging on; FC 17); `LOG_LEVEL=info`; a
+  startup-log check that no resolved `env.*` value appears.
+- **Exposure:** Service ClusterIP. Traefik IngressRoute **`PathPrefix(/v1)` only**; admin UI reached only by
+  `kubectl port-forward` (DA M4, CR M4).
 
-**NIM CRs (per env).** One `NIMService` per stand-in model, **`replicas: 0`**, pinned image and profile placeholders,
-`spec.storage.pvc` to a small pre-created PVC. **No `NIMCache` in Phase A**: a real cache object starts a model
-download job. `NIMCache` arrives with Phase B. Sync waves order PVC (wave 0) before NIMService (wave 1); the PVC carries
-`argocd.argoproj.io/sync-options: Prune=false,Delete=false`, the same protection Phase B's caches will get.
-How Argo reports a 0-replica NIMService is an expected **lab finding** to record.
+**NetworkPolicy (per env).** Bifrost ingress: Traefik, smoke Job. Egress: DNS, 443.
 
-**Bifrost (per env).** Pinned image tag (2.5.x); config generated from the catalogue: a custom OpenAI-compatible
-provider with `base_url` `https://integrate.api.nvidia.com/v1`, the NVIDIA key from a Secret, models
-`z-ai/glm-5.3-flash` and `nvidia/nemotron-3.5-lightning-30b-a3b` (stand-ins for GLM 5.2 / Nemotron 3 Super, not on the
-hosted API), served under Project-style names (`chat/glm`, `chat/nemotron`) if Bifrost aliasing supports it (else
-documented), `enforce_auth_on_inference: true`, one virtual key per env, rate/token limits per env from the catalogue,
-**content logging off**. Exposed in-cluster and via a Traefik IngressRoute (`Host: raglab-<env>.lab`, reached with
-`curl --resolve`; no DNS changes).
+**Smoke.**
+- **What runs:** `lab/smoke/smoke.py` (mounted from ConfigMap) as an Argo PostSync hook Job in `raglab-<env>`. It
+  targets the **Service** (not Traefik; CR m4) and loops over the catalogue's models.
+  - `--skip tools` where the catalogue says no tool support.
+  - VK via env var (new `--header-env` option; never argv) (SG H5).
+  - 429 backoff added to `smoke.py`; hooks serialised across envs (CR m3).
+- **Extra checks:**
+  - **limit check:** an env-level limit set below upstream's, expect 429 from Bifrost (DA M3, CR M5);
+  - **auth-negative** asserts Bifrost's own error body;
+  - **config read-back** from Bifrost's API.
+- **Output:** the JSON report goes to the Job log with the synced revision SHA.
+- **Each session:** a hard refresh + sync of each env app (hooks only run on sync, DA M3).
 
-**NetworkPolicy (per env).** Ingress to Bifrost only from Traefik and the smoke Job. Egress from Bifrost only to DNS and
-HTTPS (443). NIM pods (Phase B) only reachable from Bifrost.
+## Promotion (honest version)
 
-**Smoke gate.** `examples/smoke/smoke.py` mounted from a ConfigMap; an Argo **PostSync hook Job** per env runs it
-against that env's Bifrost (models, chat, stream, tools; `--expect-auth`). A failure marks the sync failed. Thresholds
-are looser in dev.
+- Applications track: dev → `main`, qa → branch `env/qa`, prod → branch `env/prod` (matches
+  `examples/argocd/applicationset.yaml`; DA M2).
+- Promote = PR `main → env/qa`, then `env/qa → env/prod`. Everything (base, catalogue, generated config) moves together
+  because it's the same commit.
+- QA → PROD evidence: the QA PostSync smoke JSON for **the exact commit SHA** being promoted, pasted **redacted** (no
+  IPs/hostnames) into the PR. This is **attested, not enforced**: GitHub can't see the cluster. Argo Notifications →
+  commit status is backlog (CR M1).
+- **Prod smoke detects, it doesn't prevent.** A failed prod hook means: revert PR on `env/prod`, re-sync.
+- Argo app "Healthy" is **not** evidence. Hooks don't affect app health (FC 2).
 
-**Secrets.** SOPS with a **lab-only age key** (generated on the admin workstation; private key never committed or
-shared with the homelab key). The NVIDIA API key is encrypted by the user locally (`sops`), never pasted into chat or
-logs. Secret-rendering apps use `ServerSideApply=true` (avoids plaintext in `last-applied` annotations).
+## Secrets
 
-## Promotion flow
-
-- **dev** overlay follows `main` (catalogue version + image tags from `base`).
-- **qa** and **prod** overlays carry explicit pins (catalogue revision, Bifrost tag, NIM image/profile).
-- Promote = PR copying QA's pins to prod; the PR template requires "QA last sync + smoke: Healthy/passed (screenshot
-  or `argocd app get` output)". Merge → Argo syncs prod → PostSync smoke runs in prod.
-- CI on the repo (GitHub Actions, public runners): `generate.py --check`, `kubectl kustomize` for each overlay, YAML
-  lint, `smoke.py` self-test against the mock. Cluster-dependent checks happen in-cluster (hooks).
-
-## Error handling and safety
-
-- Prune protection on caches/PVCs; no `Replace=true` anywhere.
-- Hosted API failures (rate limit, outage) surface as smoke failures, not as silent passes; documented in the lab
-  README.
-- If the VM misbehaves, stop it; nothing on the homelab depends on it.
-- Teardown: `argocd app delete` the root app (cascade), then stop/destroy the VM; revoke the NVIDIA key if no longer
-  needed.
+- **Lab age key:** generated on the MacBook into **`~/.sops/raglab-age-key.txt`** (mode 600). Check the path doesn't
+  exist first. **Never** written into `~/.config/sops/age/keys.txt` or `~/.sops/age-key.txt` (homelab keys). Used via
+  `SOPS_AGE_KEY_FILE` (direnv in `lab/`).
+  - **Backup:** one offline copy (password manager). Proven by a stdout-only test decrypt.
+  - **Loss recovery:** new key → `sops updatekeys` → reissue the NVIDIA key and Bifrost secrets → re-bootstrap
+    (SG M5).
+- **Per env Secret:** `NVIDIA_API_KEY`, `BIFROST_ENCRYPTION_KEY`, `BIFROST_ADMIN_USER`/`_PASSWORD`, `BIFROST_VK`.
+  - Created with `sops edit lab/secrets/<env>.sops.yaml` from the repo root (root `.sops.yaml` is found; FC 8). sops
+    uses a 0600 temp file that it deletes (FC 10).
+  - Editor swap/undo off for that session. **No** `export`/`echo`/`--from-literal` of keys.
+- **Bootstrap:** the age key Secret is created from the workstation (`delegate_to: localhost`) with
+  `kubectl create secret generic --from-file`.
+  - `no_log: true` on every task touching it; no `register`/`slurp`/`--diff`/`log_path`.
+  - The key never lands on the VM disk (SG H4).
+- **History:** committed ciphertext is public forever. A compromised age key means **rotating every secret ever
+  encrypted to it**, not just the key (SG H3). Age-key rotation is two-phase (add recipient → updatekeys → both
+  identities in cluster → verify → remove old).
+- **NVIDIA key:**
+  - **Scope and expiry:** a Personal key, scoped to the API catalog/endpoints only, with the shortest expiry that
+    covers the lab. A separate key per env if the quota allows; at least separate from any NGC-pull key (Phase B)
+    (DA M5, FC 18).
+  - **Rotation:** new key → `sops edit` → PR/sync → (config hash rolls Bifrost) → positive smoke → revoke the old key
+    at NVIDIA → negative probe from a script reading the key from a file.
+  - **Leak:** revoke first.
+  - **Teardown:** revocation is **mandatory**.
+- No employer data is ever sent to the hosted API.
 
 ## Testing / success criteria (Phase A done when)
 
-1. Bootstrap from a fresh VM to all Applications Healthy without manual cluster steps beyond the documented Proxmox VM
-   creation.
-2. `smoke.py` passes in dev, qa and prod through Bifrost (via Traefik), and `--expect-auth` shows unauthenticated calls
-   rejected.
-3. A catalogue change (e.g. a token limit) flows dev → qa → prod by PRs, with QA smoke as the gate, and prod's Bifrost
-   reflects it.
-4. Argo shows custom health for NIMService; removing the model PVC manifest from git does **not** delete the PVC.
-5. VM stays within its budget (≤ 2 vCPU busy, ≤ 5 GiB), and homelab etcd/control-plane metrics show no change while the
-   lab runs.
-6. The runbook in `lab/README.md` lets the learner rebuild it from scratch.
+1. From a fresh VM: bootstrap → all apps **Synced/Healthy and last operation Succeeded** (incl. hooks), with no manual
+   cluster steps beyond the documented Proxmox VM creation and hand-applied AppProject/root app.
+2. In dev, qa and prod, smoke passes: models, chat, stream, tools (where supported), auth-negative (Bifrost body) and
+   limit-429. Report contains the synced SHA.
+3. An **env-level** limit change flows main → env/qa → env/prod by PRs, Bifrost rolls (new pod), config read-back shows
+   the new value, and QA evidence matches the promoted SHA.
+4. NIMService shows the custom "scaled to zero" Healthy. Bifrost's data PVC carries `Prune=false,Delete=false` and
+   survives removal from git **while an un-annotated control ConfigMap in the same app is pruned** (proves prune is on;
+   DA M3).
+5. During a 2-hour session: host IO/memory PSI and k8s-ctrl CPU steal stay under the stop-rule thresholds; zero
+   OOMKills/evictions in the lab; homelab etcd health OK (`etcdctl endpoint health` on k8s-ctrl, read-only) before and
+   after.
+6. Gates work: a test commit containing a fake `nvapi-` string is blocked by the pre-commit hook, CI and GitHub push
+   protection. A plaintext value under `lab/secrets` fails the structural check.
+7. The learner rebuilds the lab from `lab/README.md` alone.
 
-## Phase B (separate spec, outline only)
+## Teardown checklist
 
-Rent one GPU VM (e.g. NVIDIA Brev, L4/L40S/A100) for a few hours; join it to the lab k3s as an agent over the tailnet;
-install the GPU Operator (pinned, current 26.7.x) via Argo; set one `NIMService` to 1 replica using the model-free vLLM
-NIM with a small model and a `NIMCache`; switch prod's Bifrost provider for one model from hosted to in-cluster; run
-the cutover runbook; tear down the GPU node. Budget about USD 3–12.
+Delete Applications (with resource finalizers) or simply destroy the VM.
+- **Proxmox:** remove the `raglab` storage definition and LV.
+- **Workstations:** remove kubeconfig contexts and known_hosts entries.
+- **NVIDIA:** **revoke** the key(s).
+- **Age key:** retire the lab key (keep the backup only if the history should stay decryptable).
+- **Phase B only:** tailnet device and auth key.
 
-## Open questions
+## Phase B (outline; its own spec + review)
 
-- Bifrost model aliasing to `chat/<name>` (verify in Bifrost config docs during implementation).
-- Exact NIM Operator behaviour with `replicas: 0` and a plain PVC instead of a `NIMCache` (record as findings).
-- Whether to use ApplicationSet (list generator) or three Applications (default: three Applications; simpler).
+Rent one GPU VM; join it as a k3s **agent** with `--agent-token` (never the server token) over the tailnet using
+**`tag:raglab`**.
+- **Tailnet join:**
+  - ephemeral, pre-authorised, tagged auth keys;
+  - an ACL allowing only `tag:raglab ↔ tag:raglab` on the k3s/flannel ports, plus admin → `tag:raglab`;
+  - no routes advertised or accepted;
+  - `--flannel-iface tailscale0` with MTU tuned. Phase B reinstalls the k3s server with these options (cheap: the lab is rebuildable by design).
+- **GPU stack:**
+  - GPU Operator pinned (26.7.x) with `driver.enabled=false` on pre-installed drivers;
+  - repo-server and the age key never schedule on the GPU node (taint).
+- **NIM:**
+  - a separate NGC pull key (the provider's root can read it);
+  - **dev first**, then qa/prod, via the same promotion flow.
+- **Teardown:** drain/delete node, remove the tailnet device, revoke keys, terminate the VM.
+
+## Review outcome (2026-11-24, Tier 1)
+
+- **Fixed in this revision:** CR B1, B2, M1–M8, m1–m10; DA B1, M1–M6, M8–M10, m1–m4, m7, m8; SG H1–H5, M1–M6.
+- **Phantom:** DA M7 (cert-manager required). Admission webhook is off by default in NIM Operator v3.1.4
+  (`admissionController.enabled: false`, verified in values.yaml; FC 13).
+- **Security backlog (pre-existing, outside this lab):**
+  - tailnet ACL grants `*:*` to the admin group, with LAN route and exit-node auto-approval for the owner's account;
+  - homelab monitoring has `kubeEtcd` disabled (no etcd latency metrics);
+  - orphaned `vm-100-disk-0` on hv-01's thin pool;
+  - hv-01 runs on a single 45%-worn DRAM-less NVMe.
+- **Noted, not adopted:** DA m5 (ceremony vs value). The three envs + gates are the learning objective; kept on
+  purpose, and the VM is on-demand.
