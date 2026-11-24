@@ -71,7 +71,7 @@ def test_bifrost_container(env):
 def test_job_args_and_env(env):
     jc = by(build(f"lab/envs/{env}"), "Job", "smoke")[0]["spec"]["template"]["spec"]["containers"][0]
     cmd = jc["command"]
-    assert cmd[cmd.index("--expect-limit") + 1] == "rate limit"
+    assert cmd[cmd.index("--expect-limit") + 1] == "rate limit violated for vk"
     for e in jc["env"]:
         assert "value" not in e
         if e["name"] in ("BIFROST_VK", "BIFROST_VK_PROBE"):
