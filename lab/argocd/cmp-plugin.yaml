@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cmp-plugin, namespace: argocd}
+data:
+  sops-kustomize.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata: {name: sops-kustomize}
+    spec:
+      allowConcurrency: true
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            # Fail closed: a decrypt failure fails the render (homelab incident #244/#245).
+            for f in $(find . -type f -name "*.sops.yaml"); do
+              if ! err=$(sops --decrypt --in-place "$f" 2>&1); then
+                echo "sops decrypt FAILED for $f: $err" >&2; exit 1
+              fi
+            done
+            kustomize build .
+      lockRepo: false

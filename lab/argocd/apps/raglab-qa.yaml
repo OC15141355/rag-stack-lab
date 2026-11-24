@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: raglab-qa, namespace: argocd, finalizers: [resources-finalizer.argocd.argoproj.io]}
+spec:
+  project: raglab
+  source:
+    repoURL: https://github.com/OC15141355/rag-stack-lab.git
+    targetRevision: env/qa
+    path: lab/envs/qa
+    kustomize:
+      commonAnnotations: {raglab/revision: "${ARGOCD_APP_REVISION}"}
+      commonAnnotationsEnvsubst: true
+  destination: {server: https://kubernetes.default.svc, namespace: raglab-qa}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true, SkipDryRunOnMissingResource=true]
+    retry: {limit: 5, backoff: {duration: 30s, factor: 2, maxDuration: 5m}}
+    managedNamespaceMetadata:
+      labels: {pod-security.kubernetes.io/enforce: restricted}

@@ -1,0 +1,4 @@
+nimservice-scaled-zero.yaml Healthy
+nimservice-ready.yaml Healthy
+nimservice-notready-scaled.yaml Progressing
+nimservice-failed.yaml Degraded

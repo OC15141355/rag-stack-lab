@@ -40,7 +40,24 @@ def leaves(node, path=()):
     else:
         yield path, node
 
+def is_secrets_kustomization(rel: str, text: str) -> list[str] | None:
+    """The one non-sops file allowed under lab/secrets: a pure index of *.sops.yaml names.
+    Returns None if rel isn't that file, else a (possibly empty) list of findings."""
+    if rel != "lab/secrets/kustomization.yaml":
+        return None
+    try:
+        d = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return [f"{rel}: unparseable YAML"]
+    ok = (isinstance(d, dict) and set(d) == {"apiVersion", "kind", "resources"}
+          and d["kind"] == "Kustomization" and isinstance(d["resources"], list)
+          and all(isinstance(r, str) and re.fullmatch(r"[A-Za-z0-9_-]+\.sops\.yaml", r) for r in d["resources"]))
+    return [] if ok else [f"{rel}: must contain only apiVersion, kind and a resources list of bare *.sops.yaml names"]
+
 def check_secret_file(rel: str, text: str) -> list[str]:
+    k = is_secrets_kustomization(rel, text)
+    if k is not None:
+        return k
     out = []
     if not rel.endswith(".sops.yaml"):
         out.append(f"{rel}: files under lab/secrets must be *.sops.yaml")

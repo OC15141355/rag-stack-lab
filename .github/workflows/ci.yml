@@ -35,3 +35,10 @@ jobs:
         run: scripts/sync-smoke.sh && git diff --exit-code lab/envs/base/smoke.py
       - name: unit tests
         run: uv run --with pytest --with pyyaml --with jsonschema pytest -q
+      - name: argocd CLI v3.6.2 (checksum-verified)
+        run: |
+          curl -sSLo /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/v3.6.2/argocd-linux-amd64
+          curl -sSL https://github.com/argoproj/argo-cd/releases/download/v3.6.2/cli_checksums.txt | awk '/argocd-linux-amd64$/{print $1"  /tmp/argocd"}' | sha256sum -c
+          chmod +x /tmp/argocd && sudo mv /tmp/argocd /usr/local/bin/argocd
+      - name: NIMService health check
+        run: uv run --with pyyaml bash scripts/test-health.sh

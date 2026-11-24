@@ -127,3 +127,20 @@ def test_unknown_sops_key_fails(tmp_path):
     body = ENC_OK.replace("  version: 3.13.3\n", "  version: 3.13.3\n  hunter2: leaked\n")
     r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", body))
     assert r.returncode == 1 and "unknown key" in r.stdout
+
+
+def test_secrets_kustomization_index_passes(tmp_path):
+    body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode == 0
+
+def test_secrets_kustomization_with_extra_key_fails(tmp_path):
+    body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\nsecretGenerator: [{name: x, literals: [a=b]}]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
+
+def test_secrets_kustomization_non_sops_resource_fails(tmp_path):
+    body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [plain.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
+
+def test_other_non_sops_file_under_secrets_still_fails(tmp_path):
+    body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/other.yaml", body)).returncode != 0
