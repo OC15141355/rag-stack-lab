@@ -112,3 +112,18 @@ def test_git_failure_exits_2(tmp_path):
 def test_missing_explicit_path_is_finding(tmp_path):
     r = run(tmp_path, "lab/secrets/nope.sops.yaml")
     assert r.returncode == 1 and "does not exist" in r.stdout
+
+def test_empty_file_under_secrets_fails(tmp_path):
+    for body in ("", "# just a comment\n"):
+        r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", body))
+        assert r.returncode == 1 and "no YAML documents" in r.stdout
+
+def test_sops_mac_must_be_enc(tmp_path):
+    body = ENC_OK.replace("mac: ENC[AES256_GCM,data:mac,iv:i,tag:t,type:str]", "mac: plaintext")
+    r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", body))
+    assert r.returncode == 1 and "sops.mac" in r.stdout
+
+def test_unknown_sops_key_fails(tmp_path):
+    body = ENC_OK.replace("  version: 3.13.3\n", "  version: 3.13.3\n  hunter2: leaked\n")
+    r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", body))
+    assert r.returncode == 1 and "unknown key" in r.stdout

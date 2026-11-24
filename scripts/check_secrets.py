@@ -3,7 +3,8 @@
 
 Rules:
   R1 every file under lab/secrets/ is named *.sops.yaml (paths are normalised first)
-  R2 every YAML document in those files has a top-level `sops:` block with `sops.mac`
+  R2 every file has >=1 YAML document, each with a top-level `sops:` block whose `mac` is ENC[...]
+     and whose keys are all known sops keys
   R3 every leaf outside `sops:` is ENC[...], except apiVersion, kind, type,
      metadata.name and metadata.namespace; at least one ENC leaf must exist
   R4 generated Bifrost files (lab/envs/*/generated/*) contain no literal nvapi-/sk-bf- values
@@ -25,6 +26,10 @@ PEM_PRIV = re.compile(r"-{4,5} ?BEGIN [A-Z0-9 _-]*PRIVATE KEY")
 LITERAL = re.compile(r"(nvapi-[A-Za-z0-9_-]{20,}|sk-bf-[A-Za-z0-9_-]{8,})")
 ENC = re.compile(r"^ENC\[[A-Z0-9_]+,data:.*\]$")
 
+SOPS_KEYS = {"kms", "gcp_kms", "azure_kv", "hc_vault", "age", "pgp", "lastmodified", "mac",
+             "unencrypted_suffix", "encrypted_suffix", "unencrypted_regex", "encrypted_regex",
+             "unencrypted_comment_regex", "encrypted_comment_regex", "mac_only_encrypted",
+             "version", "shamir_threshold", "key_groups"}
 PLAIN_OK = {("apiVersion",), ("kind",), ("type",), ("metadata", "name"), ("metadata", "namespace")}
 
 def leaves(node, path=()):
@@ -43,11 +48,17 @@ def check_secret_file(rel: str, text: str) -> list[str]:
         docs = [d for d in yaml.safe_load_all(text) if d is not None]
     except yaml.YAMLError as e:
         return out + [f"{rel}: unparseable YAML ({e.__class__.__name__})"]
+    if not docs:
+        out.append(f"{rel}: no YAML documents (empty or comment-only)")
     for d in docs:
         if not isinstance(d, dict) or not isinstance(d.get("sops"), dict):
             out.append(f"{rel}: no sops metadata block"); continue
-        if not d["sops"].get("mac"):
-            out.append(f"{rel}: sops.mac missing (file not produced by sops?)")
+        mac = d["sops"].get("mac")
+        if not (isinstance(mac, str) and ENC.match(mac)):
+            out.append(f"{rel}: sops.mac missing or not ENC[...] (file not produced by sops?)")
+        for k in d["sops"]:
+            if k not in SOPS_KEYS:
+                out.append(f"{rel}: unknown key in sops block: {k}")
         body = {k: v for k, v in d.items() if k != "sops"}
         enc = 0
         bad = False

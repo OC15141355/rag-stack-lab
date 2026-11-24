@@ -8,8 +8,8 @@ uv run --quiet --with pyyaml python3 scripts/check_secrets.py || fail=1
 # Scan exactly what git would see (tracked + untracked, not ignored): copy to a temp dir, no path skips.
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 git ls-files -co --exclude-standard -z | while IFS= read -r -d '' f; do
-  [[ -f "$f" ]] || continue
-  mkdir -p "$tmp/$(dirname "$f")"; cp -p "$f" "$tmp/$f"
+  [[ -f "$f" ]] || continue   # skips worktree-deleted files still in the index
+  mkdir -p -- "$tmp/$(dirname -- "$f")"; cp -p -- "$f" "$tmp/$f"
 done
 cp .gitleaks.toml "$tmp/.gitleaks.toml"
 if [[ -f .gitleaksignore ]]; then cp .gitleaksignore "$tmp/.gitleaksignore"; fi
