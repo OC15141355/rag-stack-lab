@@ -44,3 +44,27 @@ Status: **partially complete.** The run stopped at the usage limit. The ledger i
 - Applying the locked `default` project needed `--force-conflicts`.
 - The `argocd` namespace was created ad hoc by bootstrap.
 - The stricter secrets check (R3: every leaf must be ENC) was adopted beyond the plan.
+
+## Acceptance status (2026-11-25, read-only against the lab plus allowed temp-app probes)
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Bootstrap -> all Applications Synced/Healthy (fresh-VM rebuild not re-run) | PASS (live state); rebuild BLOCKED | All 9 Applications Synced/Healthy (`kubectl get applications -A`). Handover re-run (T9): strict handover failed only on smoke (NVIDIA key), passed with an explicit allow-list. The from-scratch rebuild (Task 11 Step 8) is owner-run and not done. |
+| 2 | Smoke passes in dev/qa/prod | BLOCKED | NVIDIA key is `PENDING-...`; chat/stream/tools/limit-429 fail upstream with 401. auth-negative PASS and revision recorded (dev, 8b7c3c8). Needs the owner key (runbook section 3). |
+| 3 | Promotion main -> env/qa -> env/prod | BLOCKED | Needs working smoke evidence (criterion 2). env/qa and env/prod exist and are protected. |
+| 4 | NIMService "scaled to zero" Healthy (read-only part) | PASS | Argo resource health for glm and nemotron in raglab-nim-dev/qa/prod: `Healthy`, message `scaled to zero (Phase A)` (via `argocd app get -o json`; the Application CR's `status.resources` omits per-resource health, and kubectl shows `NotReady`). |
+| 4 | Prune protection (PR removing canary + PVC) | NOT RUN | Needs merge-and-revert PRs on main; deferred to the owner. |
+| 5 | Host impact over 2 h | PARTIAL | At ~4.5 h: hv-01 PSI io/mem ~0, cpu some ~1.7; lab node 140m / 2757Mi (56%); 0 OOM/evict. etcd `endpoint health` before/after NOT run (no direct ssh to k8s-ctrl; needs the ProxyJump alias). Owner check. |
+| 6 | Gates | PARTIAL | GitHub push protection: `secret_scanning_push_protection: enabled`, `secret_scanning: enabled` (`gh api repos/OC15141355/rag-stack-lab`). No fake key pushed; the `--no-verify` push test was deliberately not attempted. Hook/CI/structural coverage is by the test suite (PR #1). |
+| 7 | Runbook | WRITTEN, rebuild test pending | `lab/README.md`. Section 2.1 (Proxmox) is reconstructed from notes, not replayed. |
+
+### Task 11 negative probes (temporary Applications in `raglab-apps`, all deleted afterwards)
+
+| Probe | Result | Message |
+|---|---|---|
+| (a) project `raglab-platform` | PASS (rejected) | `application 'probe-a' in namespace 'raglab-apps' is not permitted to use project 'raglab-platform'` |
+| (b) project `default` | PASS (rejected) | `application 'probe-b' in namespace 'raglab-apps' is not permitted to use project 'default'` |
+| (c) project `raglab`, destination `raglab-system` | PASS (rejected) | `InvalidSpecError: application destination server 'https://kubernetes.default.svc' and namespace 'raglab-system' do not match any of the allowed destinations in project 'raglab'` |
+| (d) plugin `sops-kustomize` on `lab/envs/dev` | PASS (fails) | `ComparisonError ... CMP processing failed for application "raglab-apps_probe-d" ... sops-kustomize: not permitted for ...` (guard rejected it before any decrypt) |
+
+After the probes, `kubectl -n raglab-apps get applications` shows only the 7 real apps.
