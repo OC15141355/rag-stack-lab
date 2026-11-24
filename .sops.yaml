@@ -1,0 +1,6 @@
+# Single rule. Only Kubernetes Secret manifests under lab/secrets/*.sops.yaml are encrypted.
+# Recipient = lab-only age key (never the homelab key).
+creation_rules:
+  - path_regex: ^lab/secrets/[a-z0-9-]+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age14c2r6yt9qlvj2mdl7k4hdg2rfpcga8ehpt4dnahfx2l8dvkdm50syjrs65
