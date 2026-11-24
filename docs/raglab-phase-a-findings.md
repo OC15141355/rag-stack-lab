@@ -26,12 +26,17 @@ Status: **partially complete.** The run stopped at the usage limit. The ledger i
 - **The operator chart's default image is the floating `release-3.0` tag with `Always` pull.** Pin a digest.
 - **Apps-in-any-namespace changes `ARGOCD_APP_NAME`** to `<ns>_<name>` for CMP plugins.
 
+## Verified live (2026-11-25, dev smoke at 8b7c3c8)
+- All 9 Applications are Synced/Healthy. `raglab-secrets` decrypts via the CMP, so the app-name guard (`raglab-apps_raglab-secrets`) and the sidecar `readOnlyRootFilesystem` both work.
+- The model string `nvidia-hosted/chat/glm` routes: Bifrost `routing_info` shows provider `nvidia-hosted`, model `chat/glm`, key `nvidia-dev`.
+- `key_ids: ["*"]` works (the provider key was selected). The 401 is NVIDIA's own, because of the placeholder key.
+- auth-negative passes with the Bifrost body; revision is recorded.
+- **Better limit marker:** Bifrost errors carry `"is_bifrost_error": true|false`. Upstream errors are `false`. Switch `--expect-limit` from "rate limit" to `"is_bifrost_error":true` once a real gateway 429 confirms it.
+- limit-429 can't be judged until upstream calls succeed (requests 1-2 must be 200). It needs the real NVIDIA key.
+
 ## Not yet verified live (T11)
-- whether the request model string `nvidia-hosted/chat/glm` routes
-- whether `key_ids ["*"]` works
 - whether rate-limit changes propagate to existing limit rows
 - the generic `--expect-limit "rate limit"` marker
-- whether `readOnlyRootFilesystem` works on the sops sidecar
 - the negative probes (child app with project default or raglab-platform must be rejected)
 
 ## Deviations from the plan
