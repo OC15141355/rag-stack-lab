@@ -161,7 +161,7 @@ PostSync. Profile pins are not expressible without a NIMCache; they arrive in Ph
   - VK via env var (new `--header-env` option; never argv) (SG H5).
   - 429 backoff added to `smoke.py`; hooks serialised across envs (CR m3).
 - **Extra checks:**
-  - **limit check:** an env-level limit set below upstream's, expect 429 from Bifrost (DA M3, CR M5);
+  - **limit check:** a dedicated per-env **probe virtual key** limited to 2 requests/min; 3 quick 1-token chats must get a Bifrost 429 on the third (only 2 calls ever reach upstream, so the 429 can't be NVIDIA's) (DA M3, CR M5);
   - **auth-negative** asserts Bifrost's own error body;
   - **config read-back** from Bifrost's API.
 - **Output:** the JSON report goes to the Job log with the synced revision SHA.
@@ -187,7 +187,7 @@ PostSync. Profile pins are not expressible without a NIMCache; they arrive in Ph
   - **Backup:** one offline copy (password manager). Proven by a stdout-only test decrypt.
   - **Loss recovery:** new key → `sops updatekeys` → reissue the NVIDIA key and Bifrost secrets → re-bootstrap
     (SG M5).
-- **Per env Secret:** `NVIDIA_API_KEY`, `BIFROST_ENCRYPTION_KEY`, `BIFROST_ADMIN_USER`/`_PASSWORD`, `BIFROST_VK`.
+- **Per env Secret:** `NVIDIA_API_KEY`, `BIFROST_ENCRYPTION_KEY`, `BIFROST_ADMIN_USER`/`_PASSWORD`, `BIFROST_VK`, `BIFROST_VK_PROBE`.
   - Created with `sops edit lab/secrets/<env>.sops.yaml` from the repo root (root `.sops.yaml` is found; FC 8). sops
     uses a 0600 temp file that it deletes (FC 10).
   - Editor swap/undo off for that session. **No** `export`/`echo`/`--from-literal` of keys.
