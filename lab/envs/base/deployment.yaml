@@ -12,7 +12,11 @@ spec:
       containers:
         - name: bifrost
           image: maximhq/bifrost:v2.6.0@sha256:5968d007ba4f74ee01bc4ceb071decb9927a0b7bb43dbb9072208f75e2d522e3
-          args: ["-host", "0.0.0.0", "-port", "8080", "-app-dir", "/app/data", "-log-level", "info"]
+          env:
+            - {name: APP_HOST, value: "0.0.0.0"}
+            - {name: APP_PORT, value: "8080"}
+            - {name: APP_DIR, value: /app/data}
+            - {name: LOG_LEVEL, value: info}
           envFrom: [{secretRef: {name: bifrost-env}}]
           ports: [{name: http, containerPort: 8080}]
           readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
