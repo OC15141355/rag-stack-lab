@@ -1,0 +1,27 @@
+{
+  "models": [
+    {
+      "alias": "chat/glm",
+      "capabilities": [
+        "chat",
+        "stream",
+        "tools"
+      ],
+      "context_window": 131072,
+      "id": "chat/glm",
+      "max_output_tokens": 8192,
+      "upstream": "z-ai/glm-5.3-flash"
+    },
+    {
+      "alias": "chat/nemotron",
+      "capabilities": [
+        "chat",
+        "stream"
+      ],
+      "context_window": 131072,
+      "id": "chat/nemotron",
+      "max_output_tokens": 8192,
+      "upstream": "nvidia/nemotron-3.5-lightning-30b-a3b"
+    }
+  ]
+}

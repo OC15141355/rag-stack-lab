@@ -1,0 +1,24 @@
+# lab/catalogue/catalogue.yaml — source of truth for models and per-env limits.
+# Limits are per env only (no shared defaults), so a limit change is always an env-scoped change.
+upstream:
+  provider: nvidia-hosted
+  base_url: https://integrate.api.nvidia.com
+  timeout_seconds: 300
+models:
+  - alias: chat/glm
+    upstream: z-ai/glm-5.3-flash
+    context_window: 131072
+    max_output_tokens: 8192
+    capabilities: [chat, stream, tools]
+  - alias: chat/nemotron
+    upstream: nvidia/nemotron-3.5-lightning-30b-a3b
+    context_window: 131072
+    max_output_tokens: 8192
+    capabilities: [chat, stream]
+# requests_per_minute: main virtual key (generous; normal smoke uses ~12 requests).
+# probe_requests_per_minute: a second, tiny virtual key used ONLY by the limit-429 check, so the 429 is
+# provably Bifrost's (only 2 calls ever reach upstream), never NVIDIA's own rate limit.
+environments:
+  dev:  {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
+  qa:   {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
+  prod: {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 7}
