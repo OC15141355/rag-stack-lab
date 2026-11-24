@@ -45,11 +45,20 @@ def is_secrets_kustomization(rel: str, text: str) -> list[str] | None:
     Returns None if rel isn't that file, else a (possibly empty) list of findings."""
     if rel != "lab/secrets/kustomization.yaml":
         return None
+    class Strict(yaml.SafeLoader):
+        pass
+    def no_dups(loader, node, deep=False):
+        keys = [loader.construct_object(k, deep=True) for k, _ in node.value]
+        if len(keys) != len(set(keys)):
+            raise yaml.YAMLError("duplicate key")
+        return yaml.SafeLoader.construct_mapping(loader, node, deep)
+    Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, no_dups)
     try:
-        d = yaml.safe_load(text)
+        d = yaml.load(text, Loader=Strict)
     except yaml.YAMLError:
-        return [f"{rel}: unparseable YAML"]
+        return [f"{rel}: unparseable YAML or duplicate keys"]
     ok = (isinstance(d, dict) and set(d) == {"apiVersion", "kind", "resources"}
+          and d["apiVersion"] == "kustomize.config.k8s.io/v1beta1"
           and d["kind"] == "Kustomization" and isinstance(d["resources"], list)
           and all(isinstance(r, str) and re.fullmatch(r"[A-Za-z0-9_-]+\.sops\.yaml", r) for r in d["resources"]))
     return [] if ok else [f"{rel}: must contain only apiVersion, kind and a resources list of bare *.sops.yaml names"]

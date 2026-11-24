@@ -1,3 +1,4 @@
+# HAND-APPLIED. Syncs only lab/argocd/apps (Applications in project raglab).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata: {name: raglab-root, namespace: argocd}

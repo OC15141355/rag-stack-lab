@@ -1,5 +1,5 @@
 global:
-  image: {tag: v3.6.2}
+  image: {tag: v3.6.2@sha256:bbcc3b6e79c5963439bdc5170f6e20a52365b41878133fac5ce8d6810d2641dc}
   networkPolicy: {create: true}
 dex: {enabled: false}
 notifications: {enabled: false}
@@ -40,20 +40,21 @@ repoServer:
   resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
   volumes:
     - {name: cmp-plugin, configMap: {name: cmp-plugin}}
-    - {name: cmp-tmp, emptyDir: {}}
+    - {name: cmp-tmp, emptyDir: {medium: Memory}}
     - {name: custom-tools, emptyDir: {}}
     - {name: sops-age-key, secret: {secretName: sops-age-key}}
   initContainers:
     - name: install-sops
       image: ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea
       command: [/bin/sh, -c, cp /usr/local/bin/sops /custom-tools/]
+      securityContext: {runAsNonRoot: true, runAsUser: 999, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, seccompProfile: {type: RuntimeDefault}}
       volumeMounts: [{name: custom-tools, mountPath: /custom-tools}]
   extraContainers:
     - name: sops-kustomize
       image: quay.io/argoproj/argocd:v3.6.2@sha256:bbcc3b6e79c5963439bdc5170f6e20a52365b41878133fac5ce8d6810d2641dc
       command: [/var/run/argocd/argocd-cmp-server]
       env: [{name: SOPS_AGE_KEY_FILE, value: /sops-age/keys.txt}]
-      securityContext: {runAsNonRoot: true, runAsUser: 999}
+      securityContext: {runAsNonRoot: true, runAsUser: 999, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, seccompProfile: {type: RuntimeDefault}}
       volumeMounts:
         - {name: var-files, mountPath: /var/run/argocd}
         - {name: plugins, mountPath: /home/argocd/cmp-server/plugins}

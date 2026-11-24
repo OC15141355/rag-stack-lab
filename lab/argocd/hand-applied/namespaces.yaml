@@ -1,0 +1,16 @@
+# HAND-APPLIED. Namespaces are created here, never by Argo CD apps (no CreateNamespace).
+apiVersion: v1
+kind: Namespace
+metadata: {name: raglab-system, labels: {pod-security.kubernetes.io/enforce: baseline}}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: raglab-dev, labels: {pod-security.kubernetes.io/enforce: restricted}}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: raglab-qa, labels: {pod-security.kubernetes.io/enforce: restricted}}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: raglab-prod, labels: {pod-security.kubernetes.io/enforce: restricted}}

@@ -144,3 +144,12 @@ def test_secrets_kustomization_non_sops_resource_fails(tmp_path):
 def test_other_non_sops_file_under_secrets_still_fails(tmp_path):
     body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\n"
     assert run(tmp_path, w(tmp_path, "lab/secrets/other.yaml", body)).returncode != 0
+
+
+def test_secrets_kustomization_wrong_apiversion_fails(tmp_path):
+    body = "apiVersion: v1\nkind: Kustomization\nresources: [dev.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
+
+def test_secrets_kustomization_duplicate_key_fails(tmp_path):
+    body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\nresources: [../x.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
