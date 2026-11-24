@@ -64,7 +64,7 @@ def test_raglab_system_uses_platform_project_with_inline_values():
 def test_cmp_script_has_app_name_guard():
     (cm,) = load(ARGO / "hand-applied" / "cmp-plugin.yaml")
     script = cm["data"]["sops-kustomize.yaml"]
-    assert '[ "$ARGOCD_APP_NAME" = raglab-secrets ]' in script
+    assert '[ "$ARGOCD_APP_NAME" = raglab-apps_raglab-secrets ]' in script
     assert '[ "$ARGOCD_APP_SOURCE_PATH" = lab/secrets ]' in script
     assert script.index("ARGOCD_APP_NAME") < script.index("sops --decrypt")
 
@@ -98,3 +98,8 @@ def test_application_namespaces_param_set_and_namespace_exists():
     assert v["configs"]["params"]["application.namespaces"] == "raglab-apps"
     ns = {d["metadata"]["name"]: d for d in load(ARGO / "hand-applied" / "namespaces.yaml")}
     assert ns["raglab-apps"]["metadata"]["labels"]["pod-security.kubernetes.io/enforce"] == "restricted"
+
+
+def test_apps_dir_only_yaml_files():
+    files = [f for f in (ARGO / "apps").iterdir()]
+    assert files and all(f.is_file() and f.suffix == ".yaml" for f in files), files

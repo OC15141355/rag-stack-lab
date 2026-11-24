@@ -13,8 +13,9 @@ data:
           - sh
           - -c
           - |
-            # Only the raglab-secrets app may use this plugin (it holds the age key).
-            [ "$ARGOCD_APP_NAME" = raglab-secrets ] && [ "$ARGOCD_APP_SOURCE_PATH" = lab/secrets ] || { echo "sops-kustomize: not permitted for $ARGOCD_APP_NAME" >&2; exit 1; }
+            # Only raglab-secrets may use this plugin (it holds the age key). Outside the control-plane
+            # namespace Argo's InstanceName is "<ns>_<name>" (argo-cd v3.6.2 types.go), hence raglab-apps_.
+            [ "$ARGOCD_APP_NAME" = raglab-apps_raglab-secrets ] && [ "$ARGOCD_APP_SOURCE_PATH" = lab/secrets ] || { echo "sops-kustomize: not permitted for $ARGOCD_APP_NAME" >&2; exit 1; }
             # Fail closed: a decrypt failure fails the render (homelab incident #244/#245).
             for f in $(find . -type f -name "*.sops.yaml"); do
               if ! err=$(sops --decrypt --in-place "$f" 2>&1); then

@@ -41,7 +41,7 @@ repoServer:
   resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
   volumes:
     - {name: cmp-plugin, configMap: {name: cmp-plugin}}
-    - {name: cmp-tmp, emptyDir: {medium: Memory}}
+    - {name: cmp-tmp, emptyDir: {medium: Memory, sizeLimit: 64Mi}}
     - {name: custom-tools, emptyDir: {}}
     - {name: sops-age-key, secret: {secretName: sops-age-key}}
   initContainers:
