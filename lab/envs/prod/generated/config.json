@@ -1,0 +1,121 @@
+{
+  "client": {
+    "disable_content_logging": true,
+    "enable_logging": true,
+    "enforce_auth_on_inference": true,
+    "log_retention_days": 7
+  },
+  "config_store": {
+    "config": {
+      "path": "/app/data/config.db"
+    },
+    "enabled": true,
+    "type": "sqlite"
+  },
+  "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
+  "governance": {
+    "auth_config": {
+      "admin_password": "env.BIFROST_ADMIN_PASSWORD",
+      "admin_username": "env.BIFROST_ADMIN_USER",
+      "is_enabled": true
+    },
+    "rate_limits": [
+      {
+        "id": "rl-prod",
+        "request_max_limit": 30,
+        "request_reset_duration": "1m",
+        "token_max_limit": 60000,
+        "token_reset_duration": "1m"
+      },
+      {
+        "id": "rl-prod-probe",
+        "request_max_limit": 2,
+        "request_reset_duration": "1m"
+      }
+    ],
+    "virtual_keys": [
+      {
+        "id": "vk-prod",
+        "is_active": true,
+        "name": "vk-prod",
+        "provider_configs": [
+          {
+            "allowed_models": [
+              "chat/glm",
+              "chat/nemotron"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nvidia-hosted",
+            "weight": 1
+          }
+        ],
+        "rate_limit_id": "rl-prod",
+        "value": "env.BIFROST_VK"
+      },
+      {
+        "id": "vk-prod-probe",
+        "is_active": true,
+        "name": "vk-prod-probe",
+        "provider_configs": [
+          {
+            "allowed_models": [
+              "chat/glm",
+              "chat/nemotron"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nvidia-hosted",
+            "weight": 1
+          }
+        ],
+        "rate_limit_id": "rl-prod-probe",
+        "value": "env.BIFROST_VK_PROBE"
+      }
+    ]
+  },
+  "logs_store": {
+    "config": {
+      "path": "/app/data/logs.db"
+    },
+    "enabled": true,
+    "type": "sqlite"
+  },
+  "providers": {
+    "nvidia-hosted": {
+      "custom_provider_config": {
+        "allowed_requests": {
+          "chat_completion": true,
+          "chat_completion_stream": true,
+          "list_models": true
+        },
+        "base_provider_type": "openai"
+      },
+      "keys": [
+        {
+          "aliases": {
+            "chat/glm": "z-ai/glm-5.3-flash",
+            "chat/nemotron": "nvidia/nemotron-3.5-lightning-30b-a3b"
+          },
+          "models": [
+            "chat/glm",
+            "chat/nemotron"
+          ],
+          "name": "nvidia-prod",
+          "value": "env.NVIDIA_API_KEY",
+          "weight": 1
+        }
+      ],
+      "network_config": {
+        "base_url": "https://integrate.api.nvidia.com",
+        "default_request_timeout_in_seconds": 300,
+        "stream_idle_timeout_in_seconds": 300
+      },
+      "store_raw_request_response": false
+    }
+  },
+  "source_of_truth": "config.json",
+  "version": 2
+}
