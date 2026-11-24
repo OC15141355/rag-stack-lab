@@ -1,0 +1,70 @@
+# FRESH INSTALL ONLY: no upgrade handling. The k3s install is skipped when
+# /etc/systemd/system/k3s.service exists; bumping k3s_version needs a manual upgrade.
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Inventory group raglab must not be empty
+      ansible.builtin.assert:
+        that: groups['raglab'] | default([]) | length > 0
+        fail_msg: "inventory.ini has no hosts in [raglab] (copy inventory.example.ini)"
+
+- hosts: raglab
+  become: true
+  vars:
+    k3s_version: v1.37.2+k3s1
+  tasks:
+    - name: Download k3s binary at the pinned version (checksum-verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/k3s"
+        dest: /usr/local/bin/k3s
+        mode: "0755"
+        checksum: "sha256:https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/sha256sum-amd64.txt"
+    - name: Download install script at the same tag
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version | urlencode }}/install.sh"
+        dest: /root/k3s-install.sh
+        mode: "0700"
+        checksum: "sha256:ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b"  # install.sh at v1.37.2+k3s1; recompute on bump
+    - name: Install k3s server (binary already present)
+      ansible.builtin.command:
+        cmd: /root/k3s-install.sh
+        creates: /etc/systemd/system/k3s.service
+      environment:
+        INSTALL_K3S_SKIP_DOWNLOAD: "true"
+        INSTALL_K3S_EXEC: "server --secrets-encryption --write-kubeconfig-mode 0600"
+    - name: Verify secrets encryption is on (retry while the API server starts)
+      ansible.builtin.command: k3s secrets-encrypt status
+      register: enc
+      changed_when: false
+      retries: 20
+      delay: 6
+      until: enc.rc == 0
+      failed_when: enc.rc != 0 or 'Enabled' not in enc.stdout
+    - name: Pre-create the kubeconfig destination as 0600 (before it holds credentials)
+      become: false
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../kubeconfig"
+        state: touch
+        mode: "0600"
+        modification_time: preserve
+        access_time: preserve
+    - name: Fetch kubeconfig to the workstation (gitignored path)
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ playbook_dir }}/../kubeconfig"
+        flat: true
+
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    vm_ip: "{{ hostvars['raglab-vm'].ansible_host }}"
+  tasks:
+    - name: Point the kubeconfig at the VM instead of 127.0.0.1
+      ansible.builtin.replace:
+        path: "{{ playbook_dir }}/../kubeconfig"
+        regexp: '127\.0\.0\.1'
+        replace: "{{ vm_ip }}"
+        mode: "0600"

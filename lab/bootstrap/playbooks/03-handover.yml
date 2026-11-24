@@ -1,0 +1,65 @@
+# Fail closed: every required Application must exist and be Synced/Healthy with a
+# Succeeded (or no) last operation, unless named in handover_allow_unhealthy.
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  environment: {KUBECONFIG: "{{ playbook_dir }}/../kubeconfig"}
+  vars:
+    handover_allow_unhealthy: []   # deliberate exceptions, e.g. -e '{"handover_allow_unhealthy":["raglab-dev"]}'
+    required_apps:
+      - argocd/raglab-root
+      - argocd/raglab-system
+      - raglab-apps/raglab-secrets
+      - raglab-apps/raglab-dev
+      - raglab-apps/raglab-qa
+      - raglab-apps/raglab-prod
+      - raglab-apps/raglab-nim-dev
+      - raglab-apps/raglab-nim-qa
+      - raglab-apps/raglab-nim-prod
+  tasks:
+    - name: Wait (about 20 min) for required Applications to exist and be Synced/Healthy/Succeeded
+      ansible.builtin.shell: |
+        kubectl get applications -A -o json | python3 -c '
+        import json,sys,os
+        items=json.load(sys.stdin)["items"]
+        req=json.loads(os.environ["REQ"]); allow=set(json.loads(os.environ["ALLOW"]))
+        if not items: print("no Applications found"); sys.exit(1)
+        by={a["metadata"]["namespace"]+"/"+a["metadata"]["name"]:a for a in items}
+        bad=["MISSING:"+r for r in req if r not in by]
+        for k,a in by.items():
+            if a["metadata"]["name"] in allow: continue
+            s=a.get("status",{})
+            if (s.get("sync",{}).get("status")!="Synced" or s.get("health",{}).get("status")!="Healthy"
+                or s.get("operationState",{}).get("phase") not in ("Succeeded",None)): bad.append(k)
+        print(" ".join(bad)); sys.exit(1 if bad else 0)'
+      environment:
+        REQ: "{{ required_apps | to_json }}"
+        ALLOW: "{{ handover_allow_unhealthy | to_json }}"
+      register: apps
+      retries: 40
+      delay: 30
+      until: apps.rc == 0
+      changed_when: false
+      failed_when: false   # reported, then asserted below
+    - name: Report Application readiness
+      ansible.builtin.debug:
+        msg: "{{ 'all required Applications Synced/Healthy' if apps.rc == 0 else 'NOT READY: ' ~ apps.stdout }}"
+    - name: Handover fails unless every required Application is ready
+      ansible.builtin.assert:
+        that:
+          - apps.rc == 0
+          - apps.stdout is defined
+        fail_msg: "Applications not ready: {{ apps.stdout }}"
+    - name: No Secret carries a client-side last-applied annotation
+      ansible.builtin.shell: |
+        kubectl get secrets -A -o json | python3 -c '
+        import json,sys
+        key="kubectl.kubernetes.io/last-applied-configuration"
+        bad=[s["metadata"]["namespace"]+"/"+s["metadata"]["name"] for s in json.load(sys.stdin)["items"]
+             if key in (s["metadata"].get("annotations") or {})
+             and (s["metadata"]["namespace"]=="argocd" or s["metadata"]["namespace"].startswith("raglab-"))]
+        print(" ".join(bad)); sys.exit(1 if bad else 0)'
+      changed_when: false
+    - name: How to read the Argo admin password (command only, never the value)
+      ansible.builtin.debug:
+        msg: "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d | pbcopy"
