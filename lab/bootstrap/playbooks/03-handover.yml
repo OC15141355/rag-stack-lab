@@ -1,11 +1,12 @@
 # Fail closed: every required Application must exist and be Synced/Healthy with a
-# Succeeded (or no) last operation, unless named in handover_allow_unhealthy.
+# Succeeded (or no) last operation, unless named in handover_allow_unhealthy
+# (entries are namespace/name, e.g. raglab-apps/raglab-dev).
 - hosts: localhost
   connection: local
   gather_facts: false
   environment: {KUBECONFIG: "{{ playbook_dir }}/../kubeconfig"}
   vars:
-    handover_allow_unhealthy: []   # deliberate exceptions, e.g. -e '{"handover_allow_unhealthy":["raglab-dev"]}'
+    handover_allow_unhealthy: []   # deliberate exceptions, e.g. -e '{"handover_allow_unhealthy":["raglab-apps/raglab-dev"]}'
     required_apps:
       - argocd/raglab-root
       - argocd/raglab-system
@@ -27,7 +28,7 @@
         by={a["metadata"]["namespace"]+"/"+a["metadata"]["name"]:a for a in items}
         bad=["MISSING:"+r for r in req if r not in by]
         for k,a in by.items():
-            if a["metadata"]["name"] in allow: continue
+            if k in allow: continue
             s=a.get("status",{})
             if (s.get("sync",{}).get("status")!="Synced" or s.get("health",{}).get("status")!="Healthy"
                 or s.get("operationState",{}).get("phase") not in ("Succeeded",None)): bad.append(k)
