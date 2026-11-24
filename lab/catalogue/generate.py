@@ -19,6 +19,7 @@ def build_config(cat: dict, env: str) -> dict:
     aliases = {m["alias"]: m["upstream"] for m in models}
     rl_id, vk_id = f"rl-{env}", f"vk-{env}"
     return {
+        "version": 2,
         "source_of_truth": "config.json",
         "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
         "client": {
@@ -68,16 +69,20 @@ def build_config(cat: dict, env: str) -> dict:
             "virtual_keys": [
                 {"id": vk_id, "name": vk_id, "value": "env.BIFROST_VK", "is_active": True,
                  "rate_limit_id": rl_id,
-                 "provider_configs": [{"provider": prov, "weight": 1, "allowed_models": sorted(aliases)}]},
+                 "provider_configs": [{"provider": prov, "weight": 1, "allowed_models": sorted(aliases),
+                                   "key_ids": ["*"]}]},
                 {"id": f"{vk_id}-probe", "name": f"{vk_id}-probe", "value": "env.BIFROST_VK_PROBE",
                  "is_active": True, "rate_limit_id": f"{rl_id}-probe",
-                 "provider_configs": [{"provider": prov, "weight": 1, "allowed_models": sorted(aliases)}]},
+                 "provider_configs": [{"provider": prov, "weight": 1, "allowed_models": sorted(aliases),
+                                   "key_ids": ["*"]}]},
             ],
         },
     }
 
 def build_models(cat: dict) -> dict:
-    return {"models": [{"id": m["alias"], "alias": m["alias"], "upstream": m["upstream"],
+    prov = cat["upstream"]["provider"]
+    # id = "<provider>/<alias>" routed request string; exact form is verified live in acceptance (Task 11).
+    return {"models": [{"id": f"{prov}/{m['alias']}", "provider": prov, "alias": m["alias"], "upstream": m["upstream"],
                         "context_window": m["context_window"], "max_output_tokens": m["max_output_tokens"],
                         "capabilities": m["capabilities"]} for m in cat["models"]]}
 
@@ -85,18 +90,20 @@ def render(obj: dict) -> str:
     return json.dumps(obj, indent=2, sort_keys=True) + "\n"
 
 def main() -> int:
-    ap = argparse.ArgumentParser(); ap.add_argument("--check", action="store_true"); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--check", action="store_true")
+    ap.add_argument("--out", type=Path, default=LAB / "envs", help="root dir holding <env>/generated (default lab/envs)")
+    a = ap.parse_args()
     cat = yaml.safe_load((HERE / "catalogue.yaml").read_text())
     drift = 0
     for env in ENVS:
-        out = LAB / "envs" / env / "generated"
+        out = a.out / env / "generated"
         for name, obj in (("config.json", build_config(cat, env)), ("models.json", build_models(cat))):
             p, want = out / name, render(obj)
             if a.check:
                 if not p.exists() or p.read_text() != want:
-                    print(f"DRIFT: {p.relative_to(LAB.parent)} differs from catalogue"); drift = 1
+                    print(f"DRIFT: {p} differs from catalogue"); drift = 1
             else:
-                out.mkdir(parents=True, exist_ok=True); p.write_text(want); print(f"wrote {p.relative_to(LAB.parent)}")
+                out.mkdir(parents=True, exist_ok=True); p.write_text(want); print(f"wrote {p}")
     return drift
 
 if __name__ == "__main__":

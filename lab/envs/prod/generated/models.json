@@ -8,8 +8,9 @@
         "tools"
       ],
       "context_window": 131072,
-      "id": "chat/glm",
+      "id": "nvidia-hosted/chat/glm",
       "max_output_tokens": 8192,
+      "provider": "nvidia-hosted",
       "upstream": "z-ai/glm-5.3-flash"
     },
     {
@@ -19,8 +20,9 @@
         "stream"
       ],
       "context_window": 131072,
-      "id": "chat/nemotron",
+      "id": "nvidia-hosted/chat/nemotron",
       "max_output_tokens": 8192,
+      "provider": "nvidia-hosted",
       "upstream": "nvidia/nemotron-3.5-lightning-30b-a3b"
     }
   ]

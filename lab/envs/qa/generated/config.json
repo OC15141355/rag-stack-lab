@@ -44,6 +44,9 @@
               "chat/glm",
               "chat/nemotron"
             ],
+            "key_ids": [
+              "*"
+            ],
             "provider": "nvidia-hosted",
             "weight": 1
           }
@@ -60,6 +63,9 @@
             "allowed_models": [
               "chat/glm",
               "chat/nemotron"
+            ],
+            "key_ids": [
+              "*"
             ],
             "provider": "nvidia-hosted",
             "weight": 1
@@ -110,5 +116,6 @@
       "store_raw_request_response": false
     }
   },
-  "source_of_truth": "config.json"
+  "source_of_truth": "config.json",
+  "version": 2
 }
