@@ -105,7 +105,7 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
 
 ### 2.2 Workstation prerequisites
 1. Lab age key present: `ls -l ~/.sops/raglab-age-key.txt` (mode 600, holds an `AGE-SECRET-KEY-` line). If lost, see
-   section 6 loss recovery in the spec (new key, `sops updatekeys`, reissue secrets).
+   the "Loss recovery" bullet in the spec Secrets section (new key, `sops updatekeys`, reissue secrets).
 2. Tools: `ansible`, `kubectl`, `helm`, `sops`, `argocd`.
 3. Inventory (gitignored): `cd lab/bootstrap && cp inventory.example.ini inventory.ini`, then replace
    `<LAN IP of the lab VM>` with the VM's IP. Verify `ssh ubuntu@<ip>` works first (accept the host key).
