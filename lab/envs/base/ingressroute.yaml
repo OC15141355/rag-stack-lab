@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: bifrost-v1}
+spec:
+  entryPoints: [web]
+  routes:
+    - match: Host(`raglab-env.lab`) && PathPrefix(`/v1`)
+      kind: Rule
+      services: [{name: bifrost, port: 80}]

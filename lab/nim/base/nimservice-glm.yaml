@@ -1,0 +1,14 @@
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata: {name: glm, annotations: {argocd.argoproj.io/sync-wave: "1"}}
+spec:
+  image:
+    repository: nvcr.io/nim/nvidia/vllm-model-free-nim
+    tag: "2.1.6"
+    pullPolicy: IfNotPresent
+  # Phase A: replicas 0. Scaling up (Phase B) needs authSecret / image.pullSecrets for nvcr.io.
+  replicas: 0
+  storage:
+    emptyDir: {sizeLimit: 1Gi}
+  resources: {limits: {nvidia.com/gpu: 1}}
+  expose: {service: {type: ClusterIP, port: 8000}}

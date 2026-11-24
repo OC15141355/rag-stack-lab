@@ -1,0 +1,4 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: prune-canary}
+data: {purpose: "deleted from git during acceptance test 4; must be pruned"}

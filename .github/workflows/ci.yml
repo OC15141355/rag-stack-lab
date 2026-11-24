@@ -31,5 +31,7 @@ jobs:
         run: uv run --with pyyaml python3 scripts/check_secrets.py
       - name: catalogue drift
         run: uv run --with pyyaml python3 lab/catalogue/generate.py --check
+      - name: smoke.py copy drift
+        run: scripts/sync-smoke.sh && git diff --exit-code lab/envs/base/smoke.py
       - name: unit tests
         run: uv run --with pytest --with pyyaml --with jsonschema pytest -q

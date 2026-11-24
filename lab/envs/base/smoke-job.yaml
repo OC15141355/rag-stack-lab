@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: smoke
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata: {labels: {app: smoke}}
+    spec:
+      restartPolicy: Never
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: smoke
+          image: python:3.12-slim@sha256:a0e2dd78cc679ddfffea960fe45ecfcff9ac2f68d67917a0edfcde5c2100151b
+          command: ["python3", "/smoke/smoke.py", "--base-url", "http://bifrost/v1",
+                    "--models-file", "/catalogue/models.json", "--header-env", "x-bf-vk=BIFROST_VK",
+                    "--expect-auth", "virtual key", "--limit-burst", "3",
+                    "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit",
+                    "--require-negative-checks", "--require-revision", "--max-ttft", "90",
+                    "--max-tokens", "1024", "--json-report", "/tmp/report.json"]
+          env:
+            - name: BIFROST_VK
+              valueFrom: {secretKeyRef: {name: bifrost-env, key: BIFROST_VK}}
+            - name: BIFROST_VK_PROBE
+              valueFrom: {secretKeyRef: {name: bifrost-env, key: BIFROST_VK_PROBE}}
+            - name: SYNC_REVISION
+              valueFrom: {fieldRef: {fieldPath: "metadata.annotations['raglab/revision']"}}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: script, mountPath: /smoke}
+            - {name: catalogue, mountPath: /catalogue}
+      volumes:
+        - {name: script, configMap: {name: smoke-script}}
+        - {name: catalogue, configMap: {name: bifrost-config}}
