@@ -1,0 +1,18 @@
+# HAND-APPLIED. Syncs only lab/argocd/apps (Applications in project raglab).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: raglab-root, namespace: argocd}
+spec:
+  project: raglab-root
+  source: {repoURL: https://github.com/OC15141355/rag-stack-lab.git, targetRevision: main, path: lab/argocd/apps}
+  destination: {server: https://kubernetes.default.svc, namespace: raglab-apps}
+  syncPolicy: {automated: {prune: true, selfHeal: true}}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: raglab-root, namespace: argocd}
+spec:
+  sourceRepos: [https://github.com/OC15141355/rag-stack-lab.git]
+  destinations: [{server: https://kubernetes.default.svc, namespace: raglab-apps}]
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist: [{group: argoproj.io, kind: Application}]

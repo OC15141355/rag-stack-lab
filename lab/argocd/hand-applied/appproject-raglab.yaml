@@ -1,0 +1,23 @@
+# HAND-APPLIED by bootstrap. Not under lab/argocd/apps, so a merge cannot widen it.
+# Env apps only: no cluster-scoped kinds, no RBAC, no ServiceAccounts, no raglab-system.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: raglab, namespace: argocd}
+spec:
+  sourceNamespaces: [raglab-apps]  # only Applications living in raglab-apps may use this project
+  sourceRepos: [https://github.com/OC15141355/rag-stack-lab.git]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: raglab-dev}
+    - {server: https://kubernetes.default.svc, namespace: raglab-qa}
+    - {server: https://kubernetes.default.svc, namespace: raglab-prod}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: "", kind: Service}
+    - {group: "", kind: PersistentVolumeClaim}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: traefik.io, kind: IngressRoute}
+    - {group: apps.nvidia.com, kind: NIMService}

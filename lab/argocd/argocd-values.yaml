@@ -1,0 +1,65 @@
+global:
+  image: {tag: v3.6.2@sha256:bbcc3b6e79c5963439bdc5170f6e20a52365b41878133fac5ce8d6810d2641dc}
+  networkPolicy: {create: true}
+dex: {enabled: false}
+notifications: {enabled: false}
+applicationSet: {replicas: 0}
+redis:
+  resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 128Mi}}
+controller:
+  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
+server:
+  resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+  service: {type: ClusterIP}
+configs:
+  cm:
+    admin.enabled: "true"
+    exec.enabled: "false"
+    kustomize.buildOptions: ""
+    application.resourceTrackingMethod: annotation
+    resource.customizations.health.apps.nvidia.com_NIMService: |
+      hs = {}
+      local st = nil
+      if obj.status ~= nil then st = obj.status.state end
+      local replicas = nil
+      if obj.spec ~= nil then replicas = obj.spec.replicas end
+      if st == "Ready" then
+        hs.status = "Healthy"; hs.message = "Ready"; return hs
+      end
+      if st == "Failed" then
+        hs.status = "Degraded"; hs.message = "NIMService failed"; return hs
+      end
+      if st == "NotReady" and replicas == 0 then
+        hs.status = "Healthy"; hs.message = "scaled to zero (Phase A)"; return hs
+      end
+      hs.status = "Progressing"; hs.message = "waiting for NIMService (state: " .. tostring(st) .. ")"
+      return hs
+  params:
+    server.insecure: "true"
+    application.namespaces: raglab-apps  # apps-in-any-namespace (server + controller)
+repoServer:
+  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
+  volumes:
+    - {name: cmp-plugin, configMap: {name: cmp-plugin}}
+    - {name: cmp-tmp, emptyDir: {medium: Memory, sizeLimit: 64Mi}}
+    - {name: custom-tools, emptyDir: {}}
+    - {name: sops-age-key, secret: {secretName: sops-age-key}}
+  initContainers:
+    - name: install-sops
+      image: ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea
+      command: [/bin/sh, -c, cp /usr/local/bin/sops /custom-tools/]
+      securityContext: {runAsNonRoot: true, runAsUser: 999, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, seccompProfile: {type: RuntimeDefault}}
+      volumeMounts: [{name: custom-tools, mountPath: /custom-tools}]
+  extraContainers:
+    - name: sops-kustomize
+      image: quay.io/argoproj/argocd:v3.6.2@sha256:bbcc3b6e79c5963439bdc5170f6e20a52365b41878133fac5ce8d6810d2641dc
+      command: [/var/run/argocd/argocd-cmp-server]
+      env: [{name: SOPS_AGE_KEY_FILE, value: /sops-age/keys.txt}]
+      securityContext: {runAsNonRoot: true, runAsUser: 999, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, seccompProfile: {type: RuntimeDefault}}
+      volumeMounts:
+        - {name: var-files, mountPath: /var/run/argocd}
+        - {name: plugins, mountPath: /home/argocd/cmp-server/plugins}
+        - {name: cmp-plugin, mountPath: /home/argocd/cmp-server/config/plugin.yaml, subPath: sops-kustomize.yaml}
+        - {name: cmp-tmp, mountPath: /tmp}
+        - {name: sops-age-key, mountPath: /sops-age, readOnly: true}
+        - {name: custom-tools, mountPath: /usr/local/bin/sops, subPath: sops}

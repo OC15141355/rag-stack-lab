@@ -1,0 +1,11 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: raglab-nim-prod, namespace: raglab-apps, finalizers: [resources-finalizer.argocd.argoproj.io]}
+spec:
+  project: raglab
+  source: {repoURL: https://github.com/OC15141355/rag-stack-lab.git, targetRevision: env/prod, path: lab/nim/prod}
+  destination: {server: https://kubernetes.default.svc, namespace: raglab-prod}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [SkipDryRunOnMissingResource=true]
+    retry: {limit: 5, backoff: {duration: 30s, factor: 2, maxDuration: 5m}}

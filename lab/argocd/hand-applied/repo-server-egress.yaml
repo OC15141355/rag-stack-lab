@@ -1,0 +1,14 @@
+# Hand-applied by bootstrap. Restricts where the pod holding the age key can talk.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: repo-server-egress, namespace: argocd}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: argocd-repo-server}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: argocd-redis}}}]
+      ports: [{port: 6379}]
+    - to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]}}]
+      ports: [{port: 443}]

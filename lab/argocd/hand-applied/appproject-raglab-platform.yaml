@@ -1,0 +1,23 @@
+# HAND-APPLIED. Only the NIM Operator (raglab-system app), only what chart 3.1.4 renders
+# (names verified with `helm template raglab-system ... -n raglab-system --include-crds`).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: raglab-platform, namespace: argocd}
+spec:
+  sourceRepos: [https://helm.ngc.nvidia.com/nvidia]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: raglab-system}
+  clusterResourceWhitelist:
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: "*.apps.nvidia.com"}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: k8s-nim-operator-role}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: k8s-nim-operator-metrics-reader}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: nim-operator-upgrade-crd-hook-role}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: k8s-nim-operator-rolebinding}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: nim-operator-upgrade-crd-hook-binding}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Service}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
