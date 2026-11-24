@@ -10,7 +10,7 @@ Status: **complete except items blocked on the NVIDIA key and owner checks.** Th
 5. etcd health check (criterion 5).
 6. Rebuild test (criterion 7).
 7. The prune test (criterion 4).
-8. After a real key: smoke, promotion, and switching the limit marker to `"is_bifrost_error":true`.
+8. ~~After a real key: smoke, promotion, limit marker~~ — done 2026-11-25 (see "Live with real key").
 
 ## Done
 - T1 repo gates (PR #1): gitleaks, structural secrets checker, hook, CI (30→114 tests across tasks).
@@ -41,7 +41,7 @@ Status: **complete except items blocked on the NVIDIA key and owner checks.** Th
 - The model string `nvidia-hosted/chat/glm` routes: Bifrost `routing_info` shows provider `nvidia-hosted`, model `chat/glm`, key `nvidia-dev`.
 - `key_ids: ["*"]` works (the provider key was selected). The 401 is NVIDIA's own, because of the placeholder key.
 - auth-negative passes with the Bifrost body; revision is recorded.
-- **Better limit marker:** Bifrost errors carry `"is_bifrost_error": true|false`. Upstream errors are `false`. Switch `--expect-limit` from "rate limit" to `"is_bifrost_error":true` once a real gateway 429 confirms it.
+- **Limit marker (corrected after a live test):** the gateway's own governance 429 carries `"is_bifrost_error": false`, the same as upstream errors, so that field does NOT identify gateway errors. The reliable marker is the message `Rate limit exceeded: rate limit violated for vk_model_config ...`, so the smoke Job uses `--expect-limit "rate limit violated for vk"`.
 - limit-429 can't be judged until upstream calls succeed (requests 1-2 must be 200). It needs the real NVIDIA key.
 
 ## Not yet verified live
@@ -90,3 +90,12 @@ Status: **complete except items blocked on the NVIDIA key and owner checks.** Th
 | (d) plugin `sops-kustomize` on `lab/envs/dev` | PASS (fails) | `ComparisonError ... CMP processing failed for application "raglab-apps_probe-d" ... sops-kustomize: not permitted for ...` (guard rejected it before any decrypt) |
 
 After the probes, `kubectl -n raglab-apps get applications` shows only the 7 real apps.
+
+## Live with real key (2026-11-25)
+- Key checked with a 1-token hosted call (HTTP 200), then written into all 3 env secrets via pipes. No plaintext on disk or in git (0 `nvapi` matches in the encrypted files).
+- `envFrom` Secret updates do not restart pods: after the secrets sync, run `kubectl -n raglab-<env> rollout restart deploy/bifrost`.
+- **dev smoke at 800e3e6: 9 passed, 1 skipped, 0 failed**
+  - chat, stream and tools (3/3) on `nvidia-hosted/chat/glm`; chat and stream on `nvidia-hosted/chat/nemotron` (tools skipped by capability)
+  - auth-negative passes; limit-429 returns `[200, 200, 429]`
+- Both stand-ins spend most output on reasoning tokens (33 of 33 and 170 of 174 on a one-word answer). Budget `max_tokens` accordingly; the same applies to GLM 5.2 and Nemotron 3 Super at work.
+- Gateway governance 429 body: `is_bifrost_error: false`, message `Rate limit exceeded: rate limit violated for vk_model_config *`. The marker was switched to the message.
