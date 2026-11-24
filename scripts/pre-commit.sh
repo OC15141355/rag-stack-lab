@@ -4,10 +4,10 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # bash 3.2 compatible (macOS /bin/bash): no mapfile
 staged=()
-while IFS= read -r f; do staged+=("$f"); done < <(git diff --cached --name-only --diff-filter=ACMR)
+while IFS= read -r -d '' f; do staged+=("$f"); done < <(git diff --cached -z --name-only --diff-filter=ACMR)
 [[ ${#staged[@]} -eq 0 ]] && exit 0
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-for f in "${staged[@]}"; do mkdir -p "$tmp/$(dirname "$f")"; git show ":$f" > "$tmp/$f" 2>/dev/null || true; done
+for f in "${staged[@]}"; do mkdir -p "$tmp/$(dirname "$f")"; git show ":$f" > "$tmp/$f"; done
 uv run --quiet --with pyyaml python3 scripts/check_secrets.py --root "$tmp" "${staged[@]}"
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks git . --config .gitleaks.toml --no-banner --redact --staged

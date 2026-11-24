@@ -30,12 +30,4 @@ keywords = ["sk-bf-"]
 
 [allowlist]
 description = "age PUBLIC keys are not secrets; test fixtures build fake keys at runtime"
-regexes = [
-  '''^age1[a-z0-9]{58}$''',
-  # documented placeholder in docs/prereading (not a real key)
-  '''sk-bf-not-real''',
-  # documented negative-probe placeholder in docs/prereading
-  '''^sk-bf-wrong$''',
-]
-# compiled caches embed test fixtures; they are gitignored and never committed
-paths = ['''(^|/)__pycache__/''']
+regexes = ['''^age1[a-z0-9]{58}$''']

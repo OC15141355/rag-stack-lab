@@ -1,0 +1,7 @@
+# Documented placeholders in docs/prereading (not real keys). Exact fingerprints only.
+# history (gitleaks git)
+9e8feae5336b72f5ad699dfb8b3340f26a45aa86:docs/prereading/22-bifrost-deployment.md:bifrost-virtual-key:413
+4fcd47193e8c7c7bc6c000021e9eb493c18f6616:docs/prereading/06-bifrost-llm-gateway.md:curl-auth-header:241
+# working tree (gitleaks dir)
+docs/prereading/22-bifrost-deployment.md:bifrost-virtual-key:413
+docs/prereading/06-bifrost-llm-gateway.md:curl-auth-header:241
