@@ -1,6 +1,6 @@
 """Fake Bifrost/OpenAI endpoint for smoke tests.
 MOCK_MODE: good | buffered | notools | generic401 | flaky429 ; MOCK_RPM: main-key requests/min before 429 ;
-MOCK_VK: main key ; MOCK_VK_PROBE: probe key limited to MOCK_PROBE_RPM (default 2)."""
+MOCK_VK: main key ; MOCK_LOG: header log file ; MOCK_VK_PROBE: probe key limited to MOCK_PROBE_RPM (default 2)."""
 import json, os, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -9,6 +9,7 @@ VK = os.environ.get("MOCK_VK", "sk-bf-test")
 RPM = int(os.environ.get("MOCK_RPM", "1000"))
 VK_PROBE = os.environ.get("MOCK_VK_PROBE", "sk-bf-probe")
 PROBE_RPM = int(os.environ.get("MOCK_PROBE_RPM", "2"))
+LOG = os.environ.get("MOCK_LOG")  # optional file: one JSON line of lower-cased request headers per request
 _lock, _hits, _probe_hits, _flaky = threading.Lock(), [], [], {"n": 0}
 
 class H(BaseHTTPRequestHandler):
@@ -18,6 +19,9 @@ class H(BaseHTTPRequestHandler):
         self.send_response(code); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
     def _gate(self):
+        if LOG:
+            with _lock, open(LOG, "a") as f:
+                f.write(json.dumps({"path": self.path, **{k.lower(): v for k, v in self.headers.items()}}) + "\n")
         if self.headers.get("x-bf-vk") == VK_PROBE:
             with _lock:
                 now = time.time(); _probe_hits[:] = [t for t in _probe_hits if now - t < 60]; _probe_hits.append(now)

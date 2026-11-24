@@ -23,12 +23,53 @@ import urllib.error
 import urllib.request
 
 RESULTS: list[dict] = []
+HOLD = False  # while True, record() defers printing so run_check() can annotate retries first
+MAX_RETRY_AFTER = 30.0
+DEFAULT_RETRY_AFTER = 2.0
+
+
+def parse_retry_after(value) -> float:
+    """Seconds to wait for a Retry-After header: default 2s if absent/negative/non-numeric, capped at 30s."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_RETRY_AFTER
+    if v != v or v < 0 or v == float("inf"):  # NaN, negative, infinite
+        return DEFAULT_RETRY_AFTER
+    return min(v, MAX_RETRY_AFTER)
+
+
+def emit(r: dict) -> None:
+    print(f"[{r['status']}] {r['check']}: {r['detail']}", flush=True)
 
 
 def record(name: str, ok: bool | None, detail: str, **extra) -> None:
     status = "PASS" if ok else ("SKIP" if ok is None else "FAIL")
     RESULTS.append({"check": name, "status": status, "detail": detail, **extra})
-    print(f"[{status}] {name}: {detail}", flush=True)
+    if not HOLD:
+        emit(RESULTS[-1])
+
+
+def run_check(c: "Client", name: str, fn) -> None:
+    """Run one check; annotate its results with any 429 retries it needed (PASS becomes PASS*)."""
+    global HOLD
+    n0, snap = len(RESULTS), c.snapshot()
+    HOLD = True
+    try:
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001
+            record(name, False, f"error: {e}")
+        calls, count, slept = c.since(snap)
+        for r in RESULTS[n0:]:
+            if calls:
+                r.update(retried_calls=calls, retries=count, retry_sleep=round(slept, 2))
+                r["detail"] += f" (retried {count}x across {calls} call(s), slept {slept:.1f}s)"
+                if r["status"] == "PASS":
+                    r["status"] = "PASS*"
+            emit(r)
+    finally:
+        HOLD = False
 
 
 class Client:
@@ -39,6 +80,9 @@ class Client:
         self.timeout = timeout
         self.retries = 3
         self.no_retry = False
+        self.retried_calls = self.retries_total = 0  # calls needing >=1 retry / total retries
+        self.retry_sleep = 0.0
+        self.last_retry_after: str | None = None  # Retry-After of the last un-retried 429
         self.ctx = ssl.create_default_context(cafile=ca_file)  # ca_file: private CA bundle (PEM); never disable verification
 
     def _req(self, method: str, path: str, body: dict | None, auth: bool = True) -> urllib.request.Request:
@@ -48,6 +92,20 @@ class Client:
             h["Authorization"] = f"Bearer {self.api_key}"
         data = json.dumps(body).encode() if body is not None else None
         return urllib.request.Request(self.base + path, data=data, headers=h, method=method)
+
+    def snapshot(self) -> tuple[int, int, float]:
+        return self.retried_calls, self.retries_total, self.retry_sleep
+
+    def since(self, snap: tuple[int, int, float]) -> tuple[int, int, float]:
+        return (self.retried_calls - snap[0], self.retries_total - snap[1], self.retry_sleep - snap[2])
+
+    def _backoff(self, e: urllib.error.HTTPError, attempt: int) -> None:
+        delay = parse_retry_after(e.headers.get("Retry-After"))
+        if attempt == 0:
+            self.retried_calls += 1
+        self.retries_total += 1
+        self.retry_sleep += delay
+        time.sleep(delay)
 
     def call(self, method: str, path: str, body: dict | None = None, auth: bool = True) -> tuple[int, dict | str]:
         for attempt in range(self.retries + 1):
@@ -60,18 +118,14 @@ class Client:
                         return r.status, raw
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < self.retries and not self.no_retry:
-                    try:
-                        delay = float(e.headers.get("Retry-After") or 2)
-                    except ValueError:
-                        delay = 2.0
-                    time.sleep(delay)
+                    self._backoff(e, attempt)
                     continue
+                self.last_retry_after = e.headers.get("Retry-After")
                 return e.code, e.read().decode(errors="replace")[:500]
         return 429, "retries exhausted"
 
     def stream(self, body: dict):
         """Yield (seconds_since_start, parsed_event_or_None_for_DONE)."""
-        start = time.monotonic()
         for attempt in range(self.retries + 1):  # retry 429 on connect, same policy as call()
             try:
                 r = urllib.request.urlopen(self._req("POST", "/chat/completions", body), timeout=self.timeout, context=self.ctx)
@@ -79,11 +133,8 @@ class Client:
             except urllib.error.HTTPError as e:
                 if e.code != 429 or attempt >= self.retries or self.no_retry:
                     raise
-                try:
-                    delay = float(e.headers.get("Retry-After") or 2)
-                except ValueError:
-                    delay = 2.0
-                time.sleep(delay)
+                self._backoff(e, attempt)
+        start = time.monotonic()  # after connect, so TTFT excludes retry sleeps
         with r:
             for line in r:
                 line = line.decode().strip()
@@ -202,17 +253,30 @@ def check_auth(c: Client, model: str, body_substring: str) -> None:
     record("auth-negative", ok, f"unauthenticated -> HTTP {code}; gateway body {'matched' if ok else 'NOT matched'} ({body_substring!r})")
 
 
-def check_limit(c: Client, model: str, n: int, probe_headers: dict) -> None:
-    saved, c.headers, c.no_retry, codes = c.headers, {**c.headers, **probe_headers}, True, []
+def check_limit(c: Client, model: str, n: int, probe_headers: dict, expect_body: str) -> None:
+    """Burst n chats with the low-limit probe key (no bearer, no retry): 1-2 must be 200, a later one 429 w/ marker."""
+    saved = (c.headers, c.api_key, c.no_retry)
+    c.headers, c.api_key, c.no_retry = {**c.headers, **probe_headers}, None, True
+    results, retry_after = [], None
     try:
         for _ in range(n):
-            code, _ = c.call("POST", "/chat/completions", {"model": model, "max_tokens": 1,
-                             "messages": [{"role": "user", "content": "hi"}]})
-            codes.append(code)
+            code, body = c.call("POST", "/chat/completions", {"model": model, "max_tokens": 1,
+                                "messages": [{"role": "user", "content": "hi"}]})
+            results.append((code, body))
+            if code == 429 and retry_after is None:
+                retry_after = c.last_retry_after
     finally:
-        c.headers, c.no_retry = saved, False
-    # probe key allows 2/min, so request 3 must be refused by the gateway; earlier ones may succeed
-    record("limit-429", 429 in codes[2:], f"{n} rapid probe-key requests -> codes {codes} (expect 429 from request 3)")
+        c.headers, c.api_key, c.no_retry = saved
+    codes = [r[0] for r in results]
+    first_ok = n >= 3 and codes[:2] == [200, 200]
+    hit = next((b for code, b in results[2:] if code == 429), None)
+    text = "" if hit is None else (hit if isinstance(hit, str) else json.dumps(hit))
+    marker = expect_body.lower() in text.lower()
+    ok = first_ok and hit is not None and marker
+    why = ("" if ok else "; requests 1-2 must be 200" if not first_ok
+           else "; no 429 after request 2" if hit is None else f"; 429 body lacks {expect_body!r}")
+    record("limit-429", ok, f"{n} rapid probe-key requests -> codes {codes}, Retry-After={retry_after}{why}",
+           codes=codes, retry_after=retry_after)
 
 
 def main() -> int:
@@ -231,6 +295,13 @@ def main() -> int:
     p.add_argument("--models-file", help="models.json from the catalogue; runs checks per model")
     p.add_argument("--expect-auth", metavar="BODY_SUBSTRING",
                    help="assert unauthenticated requests are rejected 401/403 with this substring in the body")
+    p.add_argument("--expect-limit", metavar="BODY_SUBSTRING",
+                   help="substring the gateway's 429 body must contain (required with --limit-burst)")
+    p.add_argument("--require-negative-checks", action="store_true",
+                   help="fail (not silently skip) when --expect-auth or --limit-burst is not given")
+    p.add_argument("--max-retried-calls", type=int, default=3,
+                   help="fail the run if more than K calls needed 429 retries (default 3)")
+    p.add_argument("--require-revision", action="store_true", help="fail if SYNC_REVISION is not set")
     p.add_argument("--limit-burst", type=int, default=0,
                    help="send N quick 1-token chats without retry using --limit-header-env; pass only if one gets 429")
     p.add_argument("--limit-header-env", default="",
@@ -241,10 +312,18 @@ def main() -> int:
     a = p.parse_args()
     if not a.model and not a.models_file:
         p.error("one of --model or --models-file is required")
+    if a.expect_auth is not None and not a.expect_auth.strip():
+        p.error("--expect-auth needs a non-empty body substring")
+    if a.expect_limit is not None and not a.expect_limit.strip():
+        p.error("--expect-limit needs a non-empty body substring")
     if a.limit_burst and "=" not in a.limit_header_env:
         p.error("--limit-burst requires --limit-header-env 'Header-Name=ENV_VAR'")
+    if a.limit_burst and not a.expect_limit:
+        p.error("--limit-burst requires --expect-limit BODY_SUBSTRING")
 
     headers = {}
+    if a.header:
+        print("warning: --header values appear in process lists (argv); use --header-env for anything secret", file=sys.stderr)
     for h in a.header:
         if ":" not in h:
             p.error(f"bad --header {h!r}")
@@ -259,41 +338,70 @@ def main() -> int:
         headers[k.strip()] = os.environ[var]
     c = Client(a.base_url, os.environ.get(a.api_key_env), headers, a.timeout, a.ca_file)
 
-    models = ([{"id": a.model, "capabilities": ["chat", "stream", "tools"]}] if a.model
-              else json.load(open(a.models_file))["models"])
+    if a.model:
+        models = [{"id": a.model, "capabilities": ["chat", "stream", "tools"]}]
+    else:
+        try:
+            with open(a.models_file) as f:
+                models = json.load(f)["models"]
+            if not isinstance(models, list) or not models:
+                raise ValueError("'models' must be a non-empty list")
+            for i, m in enumerate(models):
+                if not isinstance(m, dict) or not (m.get("id") or m.get("alias")):
+                    raise ValueError(f"models[{i}] needs an 'id' or 'alias'")
+                if not isinstance(m.get("capabilities"), list):
+                    raise ValueError(f"models[{i}] needs a 'capabilities' list")
+        except (OSError, ValueError, KeyError, TypeError) as e:  # JSONDecodeError is a ValueError
+            print(f"error: bad --models-file {a.models_file}: {e!r}", file=sys.stderr)
+            return 2
     first = models[0].get("id") or models[0]["alias"]
     for m in models:
         mid = m.get("id") or m["alias"]
         print(f"--- model {mid}")
         for name, fn in (("models", lambda: check_models(c, mid)), ("chat", lambda: check_chat(c, mid, a.max_tokens)),
                          ("stream", lambda: check_stream(c, mid, a.max_ttft)), ("tools", lambda: check_tools(c, mid, a.tool_attempts))):
-            if name in a.skip or (name == "tools" and "tools" not in m.get("capabilities", [])):
+            if name in a.skip or (name == "tools" and "tools" not in m["capabilities"] and not a.model):
                 record(name, None, "skipped")
                 continue
-            try:
-                fn()
-            except Exception as e:  # noqa: BLE001
-                record(name, False, f"error: {e}")
+            run_check(c, name, fn)
         if a.context_tokens:
-            check_context(c, mid, a.context_tokens)
+            run_check(c, "context", lambda: check_context(c, mid, a.context_tokens))
     if a.expect_auth:
-        check_auth(c, first, a.expect_auth)
+        run_check(c, "auth-negative", lambda: check_auth(c, first, a.expect_auth))
+    else:
+        record("auth-negative", False if a.require_negative_checks else None,
+               "required but --expect-auth not given" if a.require_negative_checks else "not requested (no --expect-auth)")
     if a.limit_burst:
         k, var = a.limit_header_env.split("=", 1)
         if var not in os.environ:
             p.error(f"--limit-header-env: ${var} not set")
-        check_limit(c, first, a.limit_burst, {k.strip(): os.environ[var]})
+        run_check(c, "limit-429", lambda: check_limit(c, first, a.limit_burst, {k.strip(): os.environ[var]}, a.expect_limit))
+    else:
+        record("limit-429", False if a.require_negative_checks else None,
+               "required but --limit-burst not given" if a.require_negative_checks else "not requested (no --limit-burst)")
+    if c.retried_calls > a.max_retried_calls:
+        record("retry-budget", False, f"{c.retried_calls} calls needed 429 retries (max {a.max_retried_calls}); gateway is shedding load")
+    revision = os.environ.get("SYNC_REVISION")
+    if not revision:
+        print("warning: SYNC_REVISION not set; this run is not tied to a synced revision", file=sys.stderr)
+        if a.require_revision:
+            record("revision", False, "SYNC_REVISION required but not set")
+    revision = revision or "unknown"
 
     failed = [r for r in RESULTS if r["status"] == "FAIL"]
-    print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} checks not failing; {len(failed)} failed")
-    revision = os.environ.get("SYNC_REVISION", "unknown")
+    passed = [r for r in RESULTS if r["status"] in ("PASS", "PASS*")]
+    skipped = [r for r in RESULTS if r["status"] == "SKIP"]
+    print(f"\n{len(passed)} passed, {len(skipped)} skipped, {len(failed)} failed")
+    if not passed:
+        print("FAIL: no check passed")
     print(f"revision={revision}")
     if a.json_report:
         with open(a.json_report, "w") as f:
             json.dump({"base_url": a.base_url, "model": a.model, "models": [m.get("id") or m["alias"] for m in models],
-                       "revision": revision, "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                       "revision": revision, "retried_calls": c.retried_calls, "retries": c.retries_total,
+                       "retry_sleep": round(c.retry_sleep, 2), "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                        "results": RESULTS}, f, indent=2)
-    return 1 if failed else 0
+    return 1 if failed or not passed else 0
 
 
 if __name__ == "__main__":
