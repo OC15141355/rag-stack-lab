@@ -1,0 +1,13 @@
+# HAND-APPLIED. Lets argocd-server (UI/CLI) read Applications in raglab-apps. Read-only:
+# creation of Applications stays with raglab-root (via git) and cluster admins.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: argocd-server-read-apps}
+rules:
+  - {apiGroups: [argoproj.io], resources: [applications], verbs: [get, list, watch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: argocd-server-read-apps}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: argocd-server-read-apps}
+subjects: [{kind: ServiceAccount, name: argocd-server, namespace: argocd}]

@@ -4,6 +4,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata: {name: raglab, namespace: argocd}
 spec:
+  sourceNamespaces: [raglab-apps]  # only Applications living in raglab-apps may use this project
   sourceRepos: [https://github.com/OC15141355/rag-stack-lab.git]
   destinations:
     - {server: https://kubernetes.default.svc, namespace: raglab-dev}

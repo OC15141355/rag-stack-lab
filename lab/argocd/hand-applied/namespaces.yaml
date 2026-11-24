@@ -14,3 +14,8 @@ metadata: {name: raglab-qa, labels: {pod-security.kubernetes.io/enforce: restric
 apiVersion: v1
 kind: Namespace
 metadata: {name: raglab-prod, labels: {pod-security.kubernetes.io/enforce: restricted}}
+---
+# Holds only Application objects (apps-in-any-namespace), created by raglab-root.
+apiVersion: v1
+kind: Namespace
+metadata: {name: raglab-apps, labels: {pod-security.kubernetes.io/enforce: restricted}}

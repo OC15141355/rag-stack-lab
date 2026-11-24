@@ -36,6 +36,7 @@ configs:
       return hs
   params:
     server.insecure: "true"
+    application.namespaces: raglab-apps  # apps-in-any-namespace (server + controller)
 repoServer:
   resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
   volumes:

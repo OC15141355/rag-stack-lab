@@ -18,6 +18,7 @@ def test_apps_are_raglab_project_env_namespaces_only():
     for f, d in apps():
         assert d["kind"] == "Application", f
         assert d["spec"]["project"] == "raglab", f
+        assert d["metadata"]["namespace"] == "raglab-apps", f
         assert d["spec"]["destination"].get("namespace", "raglab-dev") in ENVS or f.name == "raglab-secrets.yaml", f
         opts = d["spec"].get("syncPolicy", {}).get("syncOptions", [])
         assert not any(o.startswith("CreateNamespace") for o in opts), f
@@ -71,3 +72,29 @@ def test_nothing_hand_applied_under_apps():
     names = {f.name for f in (ARGO / "apps").glob("*.yaml")}
     for n in ["raglab-system.yaml", "root-app.yaml", "cmp-plugin.yaml", "namespaces.yaml"]:
         assert n not in names
+
+
+def test_raglab_root_can_only_create_applications_in_raglab_apps():
+    docs = load(ARGO / "hand-applied" / "root-app.yaml")
+    (proj,) = [d for d in docs if d["kind"] == "AppProject"]
+    s = proj["spec"]
+    assert proj["metadata"]["name"] == "raglab-root"
+    assert [d["namespace"] for d in s["destinations"]] == ["raglab-apps"]
+    assert s["namespaceResourceWhitelist"] == [{"group": "argoproj.io", "kind": "Application"}]
+    assert s["clusterResourceWhitelist"] == []
+    (app,) = [d for d in docs if d["kind"] == "Application"]
+    assert app["metadata"]["namespace"] == "argocd" and app["spec"]["project"] == "raglab-root"
+    assert app["spec"]["destination"]["namespace"] == "raglab-apps"
+
+def test_only_raglab_project_has_source_namespaces():
+    for f in ["appproject-raglab-platform.yaml", "appproject-default-locked.yaml"]:
+        (p,) = load(ARGO / "hand-applied" / f)
+        assert not p["spec"].get("sourceNamespaces"), f
+    (p,) = load(ARGO / "hand-applied" / "appproject-raglab.yaml")
+    assert p["spec"]["sourceNamespaces"] == ["raglab-apps"]
+
+def test_application_namespaces_param_set_and_namespace_exists():
+    v = yaml.safe_load((ARGO / "argocd-values.yaml").read_text())
+    assert v["configs"]["params"]["application.namespaces"] == "raglab-apps"
+    ns = {d["metadata"]["name"]: d for d in load(ARGO / "hand-applied" / "namespaces.yaml")}
+    assert ns["raglab-apps"]["metadata"]["labels"]["pod-security.kubernetes.io/enforce"] == "restricted"
