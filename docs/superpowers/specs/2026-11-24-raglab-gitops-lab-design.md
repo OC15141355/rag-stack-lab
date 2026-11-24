@@ -26,8 +26,8 @@ storage.
 - **Resource-wary host (hv-01):**
   - CPU: 6 physical cores, no SMT, and 10 vCPUs already allocated.
   - It hosts an etcd member (k8s-ctrl).
-  - Storage: one DRAM-less NVMe carries root, the thin pool and swap. The thin pool is 72% full and over-committed;
-    the `pve` volume group has 16 GiB free.
+  - Storage: the host's single NVMe carries root, the thin pool and swap. The thin pool is heavily used and
+    over-committed; the `pve` volume group has 16 GiB free.
 - **Public repo** is Argo's source. A merge to `main` must not equal control of the lab's secrets. No IPs, hostnames
   of the tailnet, keys or employer data in plaintext.
 - NVIDIA developer program: hosted API under the API Trial Terms (read before publishing any benchmark numbers);
@@ -185,7 +185,7 @@ PostSync. Profile pins are not expressible without a NIMCache; they arrive in Ph
   exist first. **Never** written into `~/.config/sops/age/keys.txt` or `~/.sops/age-key.txt` (homelab keys). Used via
   `SOPS_AGE_KEY_FILE` (direnv in `lab/`).
   - **Backup:** one offline copy (password manager). Proven by a stdout-only test decrypt.
-  - **Loss recovery:** new key → `sops updatekeys` → reissue the NVIDIA key and Bifrost secrets → re-bootstrap
+  - **Loss recovery:** new key (new file) → `sops rotate -i --add-age <new> --rm-age <old>` per env (NEW data key) → only then `sops edit` to enter reissued values (NVIDIA key, Bifrost secrets) → swap the cluster `sops-age-key` Secret → re-bootstrap
     (SG M5).
 - **Per env Secret:** `NVIDIA_API_KEY`, `BIFROST_ENCRYPTION_KEY`, `BIFROST_ADMIN_USER`/`_PASSWORD`, `BIFROST_VK`, `BIFROST_VK_PROBE`.
   - Created with `sops edit lab/secrets/<env>.sops.yaml` from the repo root (root `.sops.yaml` is found; FC 8). sops
@@ -196,8 +196,12 @@ PostSync. Profile pins are not expressible without a NIMCache; they arrive in Ph
   - `no_log: true` on every task touching it; no `register`/`slurp`/`--diff`/`log_path`.
   - The key never lands on the VM disk (SG H4).
 - **History:** committed ciphertext is public forever. A compromised age key means **rotating every secret ever
-  encrypted to it**, not just the key (SG H3). Age-key rotation is two-phase (add recipient → updatekeys → both
-  identities in cluster → verify → remove old).
+  encrypted to it**, not just the key (SG H3). `sops updatekeys` alone is NOT enough: it keeps the
+  data key, so old-key holders plus public history still decrypt new values. Rotation uses `sops rotate -i` (new data
+  key; flags verified against sops 3.11.0). Leak response order: revoke NVIDIA key → new age key in a new file →
+  `sops rotate -i --add-age/--rm-age` per env → only then `sops edit` new values → swap cluster Secret (no_log style, never
+  printed) → PR/merge, verify sync, restart Bifrost. Routine rotation is two-phase (add recipient + rotate → both
+  identities in cluster → verify → remove old, rotating again).
 - **NVIDIA key:**
   - **Scope and expiry:** a Personal key, scoped to the API catalog/endpoints only, with the shortest expiry that
     covers the lab. A separate key per env if the quota allows; at least separate from any NGC-pull key (Phase B)
@@ -257,10 +261,6 @@ Rent one GPU VM; join it as a k3s **agent** with `--agent-token` (never the serv
 - **Fixed in this revision:** CR B1, B2, M1–M8, m1–m10; DA B1, M1–M6, M8–M10, m1–m4, m7, m8; SG H1–H5, M1–M6.
 - **Phantom:** DA M7 (cert-manager required). Admission webhook is off by default in NIM Operator v3.1.4
   (`admissionController.enabled: false`, verified in values.yaml; FC 13).
-- **Security backlog (pre-existing, outside this lab):**
-  - tailnet ACL grants `*:*` to the admin group, with LAN route and exit-node auto-approval for the owner's account;
-  - homelab monitoring has `kubeEtcd` disabled (no etcd latency metrics);
-  - orphaned `vm-100-disk-0` on hv-01's thin pool;
-  - hv-01 runs on a single 45%-worn DRAM-less NVMe.
+- **Security backlog:** pre-existing homelab issues recorded privately.
 - **Noted, not adopted:** DA m5 (ceremony vs value). The three envs + gates are the learning objective; kept on
   purpose, and the VM is on-demand.

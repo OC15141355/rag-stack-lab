@@ -19,7 +19,7 @@ spec:
           command: ["python3", "/smoke/smoke.py", "--base-url", "http://bifrost/v1",
                     "--models-file", "/catalogue/models.json", "--header-env", "x-bf-vk=BIFROST_VK",
                     "--expect-auth", "virtual key", "--limit-burst", "3",
-                    "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit",
+                    "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit violated for vk",
                     "--require-negative-checks", "--require-revision", "--max-ttft", "90",
                     "--max-tokens", "1024", "--json-report", "/tmp/report.json"]
           env:

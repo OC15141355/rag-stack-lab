@@ -1,0 +1,55 @@
+# Age key rotation: the Secret is created only if absent, so to rotate delete it first
+# (kubectl -n argocd delete secret sops-age-key) and re-run, then restart repo-server.
+# Order matters: AppProject/Application CRDs only exist after the helm install.
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  environment: {KUBECONFIG: "{{ playbook_dir }}/../kubeconfig"}
+  vars:
+    ha: "{{ playbook_dir }}/../../argocd/hand-applied"
+    values: "{{ playbook_dir }}/../../argocd/argocd-values.yaml"
+  tasks:
+    - name: Hand-applied namespaces
+      ansible.builtin.command: kubectl apply --server-side -f {{ ha }}/namespaces.yaml
+      changed_when: true
+    - name: CMP plugin ConfigMap and repo-server egress policy
+      ansible.builtin.command: kubectl apply --server-side -f {{ item }}
+      loop: ["{{ ha }}/cmp-plugin.yaml", "{{ ha }}/repo-server-egress.yaml"]
+      changed_when: true
+    - name: age key file preflight (exists, mode 0600, holds an AGE-SECRET-KEY line; output discarded)
+      no_log: true
+      ansible.builtin.shell: |
+        f="$HOME/.sops/raglab-age-key.txt"
+        [ -f "$f" ] && [ "$(stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f")" = 600 ] \
+          && grep -q '^AGE-SECRET-KEY-' "$f" >/dev/null 2>&1
+      changed_when: false
+      register: agepre
+      failed_when: false
+    - name: Fail with a fixed message if the age key preflight failed
+      ansible.builtin.assert:
+        that: agepre.rc == 0
+        fail_msg: "age key file ~/.sops/raglab-age-key.txt missing, not mode 0600, or no AGE-SECRET-KEY- line"
+    - name: age key Secret (created on the workstation, never copied, never logged)
+      no_log: true
+      ansible.builtin.shell: |
+        kubectl -n argocd get secret sops-age-key >/dev/null 2>&1 || \
+        kubectl -n argocd create secret generic sops-age-key --from-file=keys.txt="$HOME/.sops/raglab-age-key.txt"
+      changed_when: true
+    - name: Argo CD (chart 10.18.3 = v3.6.2)
+      ansible.builtin.command: >
+        helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm
+        --version 10.18.3 -n argocd -f {{ values }} --wait --timeout 10m
+      changed_when: true
+    - name: Default project lockdown (argocd-server auto-creates it; take over its fields deliberately)
+      ansible.builtin.command: kubectl apply --server-side --force-conflicts -f {{ ha }}/appproject-default-locked.yaml
+      changed_when: true
+    - name: AppProjects raglab and raglab-platform
+      ansible.builtin.command: kubectl apply --server-side -f {{ item }}
+      loop: ["{{ ha }}/appproject-raglab.yaml", "{{ ha }}/appproject-raglab-platform.yaml"]
+      changed_when: true
+    - name: raglab-system
+      ansible.builtin.command: kubectl apply --server-side -f {{ ha }}/raglab-system.yaml
+      changed_when: true
+    - name: Root app
+      ansible.builtin.command: kubectl apply --server-side -f {{ ha }}/root-app.yaml
+      changed_when: true
