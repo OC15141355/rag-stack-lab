@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: bifrost, labels: {app: bifrost}}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: bifrost}}
+  template:
+    metadata: {labels: {app: bifrost}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: bifrost
+          image: maximhq/bifrost:v2.6.0@sha256:5968d007ba4f74ee01bc4ceb071decb9927a0b7bb43dbb9072208f75e2d522e3
+          args: ["-host", "0.0.0.0", "-port", "8080", "-app-dir", "/app/data", "-log-level", "info"]
+          envFrom: [{secretRef: {name: bifrost-env}}]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 30, periodSeconds: 20}
+          resources: {requests: {cpu: 100m, memory: 512Mi}, limits: {memory: 768Mi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: data, mountPath: /app/data}
+            - {name: config, mountPath: /app/data/config.json, subPath: config.json, readOnly: true}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: bifrost-data}}
+        - {name: config, configMap: {name: bifrost-config}}
