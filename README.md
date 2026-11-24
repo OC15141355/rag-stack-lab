@@ -99,6 +99,7 @@ recommendation, decision record). Plus a current-state [return sheet](docs/proje
 | 26 | [Ansible and GitLab as infrastructure-as-code](docs/prereading/26-ansible-gitlab-iac.md) | Platform |
 | 27 | [Argo CD in an Ansible + GitLab shop](docs/prereading/27-argocd-in-an-ansible-gitlab-shop.md) | Platform |
 | 28 | [NeMo Helix: what it is and whether you need it](docs/prereading/28-nemo-helix.md) | Platform |
+| 29 | [NVIDIA developer access and GPU options](docs/prereading/29-nvidia-developer-access-and-gpu-options.md) | Platform |
 
 A blank [day-one notes template](templates/day-one-notes.md) is in `templates/`.
 Copy it somewhere private before filling it in.
