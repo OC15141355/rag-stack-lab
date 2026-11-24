@@ -1,3 +1,5 @@
+# Age key rotation: the Secret is created only if absent, so to rotate delete it first
+# (kubectl -n argocd delete secret sops-age-key) and re-run, then restart repo-server.
 # Order matters: AppProject/Application CRDs only exist after the helm install.
 - hosts: localhost
   connection: local
@@ -7,9 +9,6 @@
     ha: "{{ playbook_dir }}/../../argocd/hand-applied"
     values: "{{ playbook_dir }}/../../argocd/argocd-values.yaml"
   tasks:
-    - name: Namespace argocd (not in namespaces.yaml)
-      ansible.builtin.shell: kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply --server-side -f -
-      changed_when: true
     - name: Hand-applied namespaces
       ansible.builtin.command: kubectl apply --server-side -f {{ ha }}/namespaces.yaml
       changed_when: true
@@ -17,6 +16,19 @@
       ansible.builtin.command: kubectl apply --server-side -f {{ item }}
       loop: ["{{ ha }}/cmp-plugin.yaml", "{{ ha }}/repo-server-egress.yaml"]
       changed_when: true
+    - name: age key file preflight (exists, mode 0600, holds an AGE-SECRET-KEY line; output discarded)
+      no_log: true
+      ansible.builtin.shell: |
+        f="$HOME/.sops/raglab-age-key.txt"
+        [ -f "$f" ] && [ "$(stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f")" = 600 ] \
+          && grep -q '^AGE-SECRET-KEY-' "$f" >/dev/null 2>&1
+      changed_when: false
+      register: agepre
+      failed_when: false
+    - name: Fail with a fixed message if the age key preflight failed
+      ansible.builtin.assert:
+        that: agepre.rc == 0
+        fail_msg: "age key file ~/.sops/raglab-age-key.txt missing, not mode 0600, or no AGE-SECRET-KEY- line"
     - name: age key Secret (created on the workstation, never copied, never logged)
       no_log: true
       ansible.builtin.shell: |
