@@ -8,7 +8,7 @@ export SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key.txt
 ```
 
 The VM's LAN IP lives only in the gitignored `lab/bootstrap/inventory.ini`. Do not write it into any committed file or PR.
-Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-namespace argocd --plaintext` (see 1.4).
+Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-namespace argocd --plaintext` (see 1.3).
 
 > Status of this runbook: the Proxmox VM steps (section 2) were reconstructed from the run notes in
 > `docs/raglab-phase-a-findings.md`, not replayed. The rebuild test (Task 11 Step 8) is still owed; fix any
@@ -33,11 +33,17 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    PW=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
    argocd login argocd-server --username admin --password "$PW"; unset PW
    ```
-4. Check, hard refresh and sync each env app (smoke is a PostSync hook and only runs on sync):
+   Caveat: `--password` puts the password on this process's argv for the length of the command (visible to `ps` for any
+   local user on the workstation). Acceptable on a single-user workstation; otherwise run `argocd login` without
+   `--password` and type it at the prompt.
+4. Check, hard refresh and sync each env app (smoke is a PostSync hook and only runs on sync). If an auto-sync is
+   already running (a commit just landed), wait for it before syncing manually (`argocd app wait`), or the two
+   operations collide:
    ```bash
    kubectl get applications -A
    for e in dev qa prod; do
      argocd app get raglab-apps/raglab-$e --hard-refresh >/dev/null
+     argocd app wait raglab-apps/raglab-$e --operation --timeout 300
      argocd app sync raglab-apps/raglab-$e
    done
    for e in dev qa prod; do kubectl -n raglab-$e logs job/smoke | tail -20; done
@@ -49,7 +55,17 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    for r in a["status"]["resources"]:print(a["metadata"]["name"],r["name"],r.get("health"))'; done
    ```
    Expect `Healthy` / `scaled to zero (Phase A)`.
-6. Handover probe (no Secret may carry `last-applied-configuration`): re-run the check in
+
+   **Every commit to a tracked branch restarts Bifrost and reruns smoke.** The revision annotation reaches the pod
+   template, so every commit to `main` (dev), `env/qa` or `env/prod` rolls that env's Bifrost and reruns the smoke hook.
+   That costs real NVIDIA calls per commit and can trip the probe key's limit within 60 s. Do not push a burst of
+   commits to a tracked branch; batch them.
+6. Before re-running any bootstrap playbook, review what changed since the last bootstrap (hand-applied files become
+   live on re-run). Record the bootstrap SHA when you run it, then:
+   ```bash
+   git fetch origin && git diff <bootstrap-sha>..origin/main -- lab/argocd/hand-applied lab/argocd/argocd-values.yaml lab/bootstrap
+   ```
+7. Handover probe (no Secret may carry `last-applied-configuration`): re-run the check in
    `lab/bootstrap/playbooks/03-handover.yml` with `cd lab/bootstrap && ansible-playbook playbooks/03-handover.yml`.
 
 ### Stop rule
@@ -76,7 +92,7 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    mkdir -p /mnt/raglab
    echo "/dev/pve/raglab /mnt/raglab ext4 defaults,nofail 0 2" >> /etc/fstab
    mount /mnt/raglab
-   pvesm add dir raglab --path /mnt/raglab --content images,iso --nodes hv-01
+   pvesm add dir raglab --path /mnt/raglab --is_mountpoint yes --content images,iso --nodes hv-01
    pvesm status | grep raglab'
    ```
 3. Download the Ubuntu 24.04 cloud image and VERIFY its checksum against Canonical's `SHA256SUMS` before use
@@ -88,7 +104,7 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    ssh hv-01 'set -e
    qm create 101 --name raglab --cores 2 --memory 5120 --balloon 0 --cpuunits 50 --onboot 0 \
      --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-pci --ostype l26
-   qm importdisk 101 /path/to/noble-server-cloudimg-amd64.img raglab
+   qm importdisk 101 /path/to/noble-server-cloudimg-amd64.img raglab --format raw
    qm set 101 --scsi0 raglab:101/vm-101-disk-0.raw,mbps_wr=50,iops_wr=500 --boot order=scsi0
    qm resize 101 scsi0 13G
    qm set 101 --ide2 raglab:cloudinit --ciuser ubuntu --sshkeys /path/to/pubkey --ipconfig0 ip=dhcp
@@ -105,8 +121,13 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
 
 ### 2.2 Workstation prerequisites
 1. Lab age key present: `ls -l ~/.sops/raglab-age-key.txt` (mode 600, holds an `AGE-SECRET-KEY-` line). If lost, see
-   the "Loss recovery" bullet in the spec Secrets section (new key, `sops updatekeys`, reissue secrets).
-2. Tools: `ansible`, `kubectl`, `helm`, `sops`, `argocd`.
+   the "Loss recovery" bullet in the spec Secrets section (new key, `sops rotate`, reissue secrets).
+2. Clone, then install the hooks and verify them:
+   ```bash
+   scripts/install-hooks.sh && git config core.hooksPath     # must print .githooks
+   ```
+   Tools needed on the workstation: `python3`, `uv`, `gh`, `age` / `age-keygen`, `sops`, `gitleaks`, `kubectl`, `helm`,
+   `ansible`, and the `argocd` CLI.
 3. Inventory (gitignored): `cd lab/bootstrap && cp inventory.example.ini inventory.ini`, then replace
    `<LAN IP of the lab VM>` with the VM's IP. Verify `ssh ubuntu@<ip>` works first (accept the host key).
 
@@ -129,7 +150,8 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    ```
    Until the NVIDIA key is real (section 3), the smoke hooks fail upstream with 401 and handover will report the env
    apps as not ready. Only then, and deliberately, allow them:
-   `ansible-playbook playbooks/03-handover.yml -e '{"handover_allow_unhealthy":["raglab-dev","raglab-qa","raglab-prod"]}'`
+   `ansible-playbook playbooks/03-handover.yml -e '{"handover_allow_unhealthy":["raglab-apps/raglab-dev","raglab-apps/raglab-qa","raglab-apps/raglab-prod"]}'`
+   (entries are `namespace/name`)
 4. Do a session start (1.4) to sync and read smoke.
 
 ## 3. Adding the NVIDIA key (owner TODO)
@@ -148,7 +170,7 @@ shortest expiry that covers the lab (a separate key per env if quota allows).
 5. Sync each env (1.4) and read `kubectl -n raglab-<env> logs job/smoke | tail -20`. Expect `0 failed`,
    `[PASS] auth-negative`, `[PASS] limit-429`, `revision=<sha>`.
 6. If chat returns 404 from upstream, set `upstream.base_url` in the catalogue to
-   `https://integrate.api.nvidia.com/v1`, regenerate (`lab/catalogue/generate.py`) and PR.
+   `https://integrate.api.nvidia.com/v1`, regenerate (`uv run --with pyyaml python3 lab/catalogue/generate.py`) and PR.
 7. Open item: replace `--expect-limit "rate limit"` with the Bifrost-specific marker `"is_bifrost_error":true` once a real
    gateway 429 confirms it.
 8. Copy the lab age key into your password manager.
@@ -157,8 +179,11 @@ shortest expiry that covers the lab (a separate key per env if quota allows).
 Apps track: dev = `main`, qa = `env/qa`, prod = `env/prod`. Everything (base, catalogue, generated config) moves
 together because it is the same commit.
 1. Change on `main` by PR (example: `environments.dev.requests_per_minute` 30 -> 28 in the catalogue, regenerate). Merge.
-2. Sync dev (1.4). Dev Bifrost rolls (new ReplicaSet, new ConfigMap hash). Get evidence and the SHA:
+2. Sync dev (1.4). Dev Bifrost rolls (it rolls on every commit, see 1.4). Evidence of a config change is that the
+   `bifrost-config-<hash>` ConfigMap name changed (`kubectl -n raglab-dev get cm | grep bifrost-config`), plus the
+   config read-back in section 4.1 below. Get the SHA:
    ```bash
+   git fetch origin
    SHA=$(git rev-parse origin/main)
    kubectl -n raglab-dev logs job/smoke | tail -40       # must show revision=$SHA and 0 failed
    ```
@@ -166,12 +191,38 @@ together because it is the same commit.
    ```bash
    gh pr create --base env/qa --head main --title "promote $SHA to qa" --body-file .github/pull_request_template.md
    ```
-   Fill the template: the SHA, the redacted dev smoke tail (no IPs or hostnames), and tick the boxes. Merge; sync qa.
-4. Same again for `env/qa` -> `env/prod` using the QA smoke tail for the same SHA.
+   Fill the template: the SHA, the redacted dev smoke tail (no IPs or hostnames), and tick the boxes. Merge with
+   **"Create a merge commit"** (never squash, never rebase: a squash gives `env/qa` a new SHA, so the promoted SHA no
+   longer matches the smoke evidence and the next promotion diverges). Sync qa.
+4. Same again for `env/qa` -> `env/prod` using the QA smoke tail for the same SHA, again with "Create a merge commit".
+   **OWNER TODO:** set `strict: false` on the `env/*` branch protection (keep the required `gates` check). With
+   `strict: true`, the second promotion blocks as "out of date". An automated attempt to change this was refused by the
+   permission policy; it is an owner decision.
 5. This gate is attested, not enforced. A failed prod smoke means: revert PR on `env/prod`, re-sync.
 6. "Healthy" in Argo is not evidence; only the smoke report with the matching `revision=` is.
 7. Known open question: whether a rate-limit change propagates to existing Bifrost limit rows (rows are runtime-owned).
-   Check `config read-back` after step 2.
+   Check with the read-back below after step 2.
+
+### 4.1 Config read-back (is the live value what the catalogue says?)
+Bifrost v2.6.0 management API, verified in source (`transports/bifrost-http/handlers/governance.go` at ref
+`transports/v2.6.0`): `GET /api/governance/virtual-keys` (response `.virtual_keys[]`, each with `.rate_limit`),
+`GET /api/governance/virtual-keys/{vk_id}`, `GET /api/governance/rate-limits` (response `.rate_limits[]`,
+field `request_max_limit`). Management routes accept admin basic auth per the auth middleware. UNVERIFIED live: the
+paths and JSON shape are read from source; the commands below have not been run against the lab (it was off). If a
+call 404s, use the UI (Governance -> Virtual Keys / Rate Limits) instead.
+```bash
+E=dev   # or qa / prod
+kubectl -n raglab-$E port-forward svc/bifrost 18080:80 >/dev/null 2>&1 & PF=$!; sleep 3
+BF_USER=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROST_ADMIN_USER}' | base64 -d)
+BF_PASS=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROST_ADMIN_PASSWORD}' | base64 -d)
+# curl reads the credential from stdin (--config -), so it never appears on argv or in output
+printf 'user = "%s:%s"\n' "$BF_USER" "$BF_PASS" | curl -s --config - http://127.0.0.1:18080/api/governance/virtual-keys/vk-$E \
+  | python3 -c 'import json,sys;v=json.load(sys.stdin);print(v.get("id"),v.get("rate_limit",{}).get("request_max_limit"))'
+printf 'user = "%s:%s"\n' "$BF_USER" "$BF_PASS" | curl -s --config - http://127.0.0.1:18080/api/governance/rate-limits \
+  | python3 -c 'import json,sys;[print(r["id"],r.get("request_max_limit")) for r in json.load(sys.stdin)["rate_limits"]]'
+unset BF_USER BF_PASS; kill $PF
+```
+Compare `request_max_limit` with `lab/envs/$E/generated/config.json` (`rl-$E`).
 
 ## 5. NVIDIA key rotation
 1. Create the new key at NVIDIA (same scope; shortest expiry).
@@ -181,37 +232,70 @@ together because it is the same commit.
 5. Negative probe with the old key read from a file, expecting failure (never put the key on argv):
    ```bash
    OLD=$(cat /path/to/old-key-file) python3 lab/smoke/smoke.py --base-url https://integrate.api.nvidia.com/v1 \
-     --api-key-env OLD --model z-ai/glm-5.3-flash --skip stream --skip tools --skip models   # must FAIL (401/403)
+     --api-key-env OLD --model z-ai/glm-5.3-flash --skip stream --skip tools --skip models   # must FAIL
    ```
-   Also, for a Bifrost virtual-key rotation, probe the old VK is refused:
+   Assert the failure is HTTP 401 or 403 specifically (the smoke output must show `401` or `403`), not a timeout, 429 or
+   5xx: any other failure proves nothing about the key. Also, for a Bifrost virtual-key rotation, probe the old VK is refused:
    `python3 lab/smoke/smoke.py ... --header-env x-bf-vk=OLD_VK` expecting failure.
 
-## 6. Age-key rotation (two-phase) and leak response
-Committed ciphertext is public forever. A compromised age key means rotating EVERY secret ever encrypted to it
-(NVIDIA key, Bifrost keys, admin passwords), not just the key.
+## 6. Age-key rotation and leak response
+Committed ciphertext is public forever. `sops updatekeys` only changes who can unwrap the EXISTING data key; it does
+not change the data key. So anyone holding the old age key plus the public git history can still decrypt the new
+values if the data key was never rotated. The fix is `sops rotate` (generates a NEW data key and re-encrypts every value).
+Verified with `sops 3.11.0`: `sops rotate --help` lists `--in-place/-i`, `--add-age` and `--rm-age`.
 
-### Leak response (revoke first)
-1. Revoke the NVIDIA key at NVIDIA. Rotate every Bifrost secret value. Then do the rotation below.
-2. Scan: `scripts/safety-check.sh`; check GitHub secret-scanning alerts.
-
-### Two-phase rotation
-1. Generate the new key: `age-keygen -o ~/.sops/raglab-age-key-new.txt` (do not overwrite the old one).
-2. Phase 1, add recipient: add the new public key to the recipients in `.sops.yaml`, then
-   `for e in dev qa prod; do sops updatekeys -y lab/secrets/$e.sops.yaml; done`. PR and merge.
-3. Put BOTH identities into the cluster Secret (the playbook creates `sops-age-key` only if absent, so delete first),
-   concatenating both key files into one `keys.txt`:
+### Leak response (old key compromised)
+Order matters. Do NOT enter new values until the data key has been rotated, or the new values are encrypted under a
+data key the old-key holder can already unwrap.
+1. Revoke the NVIDIA key at NVIDIA first.
+2. Generate a new age key into a NEW file (never overwrite the old one):
    ```bash
-   cat ~/.sops/raglab-age-key.txt ~/.sops/raglab-age-key-new.txt > /private/tmp/raglab-both.txt   # chmod 600; delete after
+   age-keygen -o ~/.sops/raglab-age-key-new.txt
+   NEW=$(grep -o 'age1[a-z0-9]*' ~/.sops/raglab-age-key-new.txt | head -1)    # public key
+   OLD=$(grep -o 'age1[a-z0-9]*' ~/.sops/raglab-age-key.txt | head -1)
+   ```
+3. Per env, rotate to a NEW data key and swap recipients (also update `.sops.yaml` to list only `$NEW`):
+   ```bash
+   for e in dev qa prod; do
+     SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key.txt sops rotate -i --add-age "$NEW" --rm-age "$OLD" lab/secrets/$e.sops.yaml
+   done
+   ```
+4. Only THEN enter the new values (new NVIDIA key, new Bifrost encryption key, admin credentials, VKs), decrypting
+   with the new key:
+   ```bash
+   for e in dev qa prod; do SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key-new.txt sops edit lab/secrets/$e.sops.yaml; done
+   ```
+5. Swap the cluster `sops-age-key` Secret to the new key (delete and create from the file; the value is never printed
+   and never passed on argv; the playbook only creates it if absent):
+   ```bash
    kubectl -n argocd delete secret sops-age-key
-   kubectl -n argocd create secret generic sops-age-key --from-file=keys.txt=/private/tmp/raglab-both.txt
+   kubectl -n argocd create secret generic sops-age-key --from-file=keys.txt=$HOME/.sops/raglab-age-key-new.txt
    kubectl -n argocd rollout restart deploy/argocd-repo-server
-   rm -P /private/tmp/raglab-both.txt
+   ```
+6. PR and merge (hook and `gates` must pass), verify `raglab-secrets` and the env apps sync, then restart Bifrost so it
+   reads the new Secret: `for e in dev qa prod; do kubectl -n raglab-$e rollout restart deploy/bifrost; done`. Smoke must PASS.
+7. Replace `~/.sops/raglab-age-key.txt` with the new key, update the password manager, keep the offline backup in the
+   owner's private location current, and run `scripts/safety-check.sh`; check GitHub secret-scanning alerts.
+
+### Routine age-key rotation (old key NOT compromised)
+Same mechanism, with a two-phase cluster cutover so the repo-server can decrypt at every step. Every file edit uses
+`sops rotate -i` (new data key), not `updatekeys` alone.
+1. Generate the new key into a new file (as above).
+2. Phase 1, add the recipient and rotate the data key: add the new public key to `.sops.yaml`, then
+   `for e in dev qa prod; do sops rotate -i --add-age "$NEW" lab/secrets/$e.sops.yaml; done`. PR and merge.
+3. Put BOTH identities into the cluster Secret (delete first), combined in a private temp file:
+   ```bash
+   ( umask 077; f=$(mktemp); cat ~/.sops/raglab-age-key.txt ~/.sops/raglab-age-key-new.txt > "$f"
+     kubectl -n argocd delete secret sops-age-key
+     kubectl -n argocd create secret generic sops-age-key --from-file=keys.txt="$f"
+     rm -f "$f" )
+   kubectl -n argocd rollout restart deploy/argocd-repo-server
    ```
 4. Verify: hard refresh and sync `raglab-secrets`; it must stay Synced/Healthy.
-5. Phase 2, remove the old recipient: edit `.sops.yaml`, `sops updatekeys -y` for each env file, PR, merge. Recreate
-   the cluster Secret with only the new key (as in step 3 with the new file alone), restart repo-server, verify sync.
-6. Replace `~/.sops/raglab-age-key.txt` with the new key, update the password manager and the core-01 backup
-   (`~/.homelab-backup/`). In a leak case, also reissue all secret values (history stays decryptable with the old key).
+5. Phase 2, remove the old recipient: `sops rotate -i --rm-age "$OLD" lab/secrets/$e.sops.yaml` for each env, update
+   `.sops.yaml`, PR, merge. Recreate the cluster Secret with only the new key, restart repo-server, verify sync.
+6. Replace `~/.sops/raglab-age-key.txt` with the new key and update the password manager and the offline backup
+   (owner's private location).
 
 ## 7. Teardown checklist (from the spec)
 Delete Applications (with resource finalizers) or simply destroy the VM.
