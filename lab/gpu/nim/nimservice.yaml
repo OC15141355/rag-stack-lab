@@ -13,7 +13,7 @@ spec:
   authSecret: ngc-api-key
   storage:
     nimCache: {name: llama-8b, profile: "092ed4213624e774d24cdaf84e3b6222839bab2008a21d3c214ab46626366f90"}
-    readOnly: true
+    readOnly: false   # NIM 2.1.7 refuses a read-only cache: "Cache directory /model-store is not accessible" (found live)
     sharedMemorySizeLimit: 8Gi
   labels: {app.kubernetes.io/component: nim-llm}
   resources:
