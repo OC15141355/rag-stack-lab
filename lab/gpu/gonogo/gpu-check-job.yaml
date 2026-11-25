@@ -16,7 +16,7 @@ spec:
       containers:
         - name: nvidia-smi
           image: nvcr.io/nim/meta/llama-3.1-8b-instruct:2.1.7@sha256:5ada92d1ca5c30069956e6e1322f0fbb250b4683b566aedb6547b10a64faf00b
-          command: [nvidia-smi, --query-gpu=name,memory.total,driver_version, --format=csv,noheader]
+          command: [nvidia-smi, "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"]
           resources:
             requests: {cpu: 100m, memory: 256Mi, nvidia.com/gpu: 1}
             limits: {memory: 512Mi, nvidia.com/gpu: 1}

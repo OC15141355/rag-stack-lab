@@ -137,7 +137,7 @@ parts = re.split(r"Compatible with system and runnable:?", t, maxsplit=1)
 if len(parts) < 2:
     sys.exit("NO-GO? no 'Compatible with system and runnable' section: read the file by eye")
 runnable = re.split(r"\n\s*-?\s*(?:Compilable|Incompatible)", parts[1], maxsplit=1)[0]
-m = re.search(r"-\s*(\S+)\s*\(vllm-bf16-tp1-pp1\)", runnable) or re.search(r"-\s*(vllm-bf16-tp1-pp1)\b", runnable)
+m = re.search(r"-\s*(\S+)\s*\(vllm-bf16-tp1-pp1(?:-[\d.]+)?\)", runnable)   # NIM 2.1.7 prints "(vllm-bf16-tp1-pp1-33.0)"
 print(f"GO profile={m.group(1)}" if m else "NO-GO: vllm-bf16-tp1-pp1 is not runnable on this GPU")
 sys.exit(0 if m else 1)
 PY
