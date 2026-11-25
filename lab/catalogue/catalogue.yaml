@@ -28,7 +28,9 @@ models:
     max_output_tokens: 8192
     capabilities: [chat, stream]
   - alias: chat/small
-    upstream: meta/llama-3.1-8b-instruct   # same served name on hosted and on the NIM
+    # Hosted stand-in: meta/llama-3.1-8b-instruct was retired from the hosted API (HTTP 410, 2026-11-26).
+    # The cutover PR (session/gpu-cutover) sets this to meta/llama-3.1-8b-instruct on nim-local; not like-for-like.
+    upstream: z-ai/glm-5.3-flash
     context_window: 131072
     max_output_tokens: 4096
     capabilities: [chat, stream, tools]

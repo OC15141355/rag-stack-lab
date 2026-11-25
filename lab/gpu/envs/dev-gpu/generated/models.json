@@ -11,7 +11,7 @@
       "id": "nvidia-hosted/chat/small",
       "max_output_tokens": 4096,
       "provider": "nvidia-hosted",
-      "upstream": "meta/llama-3.1-8b-instruct"
+      "upstream": "z-ai/glm-5.3-flash"
     }
   ]
 }
