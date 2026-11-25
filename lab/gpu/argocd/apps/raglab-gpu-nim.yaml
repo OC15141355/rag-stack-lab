@@ -1,0 +1,12 @@
+# Added by the go/no-go PR only (lab/gpu/README.md 3.5). CI fails while the profile placeholder remains.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: raglab-gpu-nim, namespace: raglab-apps, finalizers: [resources-finalizer.argocd.argoproj.io]}
+spec:
+  project: raglab-gpu
+  source: {repoURL: https://github.com/OC15141355/rag-stack-lab.git, targetRevision: main, path: lab/gpu/nim}
+  destination: {server: https://kubernetes.default.svc, namespace: raglab-gpu}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [SkipDryRunOnMissingResource=true]
+    retry: {limit: 5, backoff: {duration: 30s, factor: 2, maxDuration: 5m}}
