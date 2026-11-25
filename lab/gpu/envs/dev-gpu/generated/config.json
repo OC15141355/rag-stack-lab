@@ -1,0 +1,117 @@
+{
+  "client": {
+    "disable_content_logging": true,
+    "enable_logging": true,
+    "enforce_auth_on_inference": true,
+    "log_retention_days": 1
+  },
+  "config_store": {
+    "config": {
+      "path": "/app/data/config.db"
+    },
+    "enabled": true,
+    "type": "sqlite"
+  },
+  "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
+  "governance": {
+    "auth_config": {
+      "admin_password": "env.BIFROST_ADMIN_PASSWORD",
+      "admin_username": "env.BIFROST_ADMIN_USER",
+      "is_enabled": true
+    },
+    "rate_limits": [
+      {
+        "id": "rl-dev-gpu",
+        "request_max_limit": 28,
+        "request_reset_duration": "1m",
+        "token_max_limit": 60000,
+        "token_reset_duration": "1m"
+      },
+      {
+        "id": "rl-dev-gpu-probe",
+        "request_max_limit": 2,
+        "request_reset_duration": "1m"
+      }
+    ],
+    "virtual_keys": [
+      {
+        "id": "vk-dev-gpu",
+        "is_active": true,
+        "name": "vk-dev-gpu",
+        "provider_configs": [
+          {
+            "allowed_models": [
+              "chat/small"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nvidia-hosted",
+            "weight": 1
+          }
+        ],
+        "rate_limit_id": "rl-dev-gpu",
+        "value": "env.BIFROST_VK"
+      },
+      {
+        "id": "vk-dev-gpu-probe",
+        "is_active": true,
+        "name": "vk-dev-gpu-probe",
+        "provider_configs": [
+          {
+            "allowed_models": [
+              "chat/small"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "provider": "nvidia-hosted",
+            "weight": 1
+          }
+        ],
+        "rate_limit_id": "rl-dev-gpu-probe",
+        "value": "env.BIFROST_VK_PROBE"
+      }
+    ]
+  },
+  "logs_store": {
+    "config": {
+      "path": "/app/data/logs.db"
+    },
+    "enabled": true,
+    "type": "sqlite"
+  },
+  "providers": {
+    "nvidia-hosted": {
+      "custom_provider_config": {
+        "allowed_requests": {
+          "chat_completion": true,
+          "chat_completion_stream": true,
+          "list_models": true
+        },
+        "base_provider_type": "openai"
+      },
+      "keys": [
+        {
+          "aliases": {
+            "chat/small": "meta/llama-3.1-8b-instruct"
+          },
+          "models": [
+            "chat/small"
+          ],
+          "name": "nvidia-dev-gpu",
+          "value": "env.NVIDIA_API_KEY",
+          "weight": 1
+        }
+      ],
+      "network_config": {
+        "base_url": "https://integrate.api.nvidia.com",
+        "default_request_timeout_in_seconds": 300,
+        "stream_idle_timeout_in_seconds": 300
+      },
+      "store_raw_request_response": false
+    }
+  },
+  "source_of_truth": "config.json",
+  "version": 2
+}

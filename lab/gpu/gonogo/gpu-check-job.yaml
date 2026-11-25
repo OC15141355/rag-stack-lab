@@ -1,0 +1,23 @@
+# Applied BY HAND (lab/gpu/README.md, T+0:35). Proves a pod gets the GPU through the NRI/CDI path with no
+# runtimeClassName, and pre-pulls the pinned NIM image (reused by the go/no-go Job, NIMCache and NIMService).
+apiVersion: batch/v1
+kind: Job
+metadata: {name: gpu-check, namespace: raglab-gpu}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata: {labels: {app: gpu-check}}
+    spec:
+      restartPolicy: Never
+      imagePullSecrets: [{name: ngc-pull}]
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 2000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: nvidia-smi
+          image: nvcr.io/nim/meta/llama-3.1-8b-instruct:2.1.7@sha256:5ada92d1ca5c30069956e6e1322f0fbb250b4683b566aedb6547b10a64faf00b
+          command: [nvidia-smi, --query-gpu=name,memory.total,driver_version, --format=csv,noheader]
+          resources:
+            requests: {cpu: 100m, memory: 256Mi, nvidia.com/gpu: 1}
+            limits: {memory: 512Mi, nvidia.com/gpu: 1}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}

@@ -1,0 +1,24 @@
+# Phase B (rented GPU cluster only). Field names checked against the vendored v3.1.4 CRD in CI.
+# The profile is filled by the go/no-go PR from `list-model-profiles` on the real A100 (lab/gpu/README.md).
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMCache
+metadata:
+  name: llama-8b
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  source:
+    ngc:
+      modelPuller: nvcr.io/nim/meta/llama-3.1-8b-instruct:2.1.7@sha256:5ada92d1ca5c30069956e6e1322f0fbb250b4683b566aedb6547b10a64faf00b
+      pullSecret: ngc-pull
+      authSecret: ngc-api-key
+      model:
+        profiles: ["PENDING-GO-NO-GO"]
+  storage:
+    pvc: {create: true, storageClass: local-path, size: 60Gi, volumeAccessMode: ReadWriteOnce}
+  tolerations: []          # single node, no GPU taint
+  resources: {cpu: "2", memory: 8Gi}
+  userID: 1000
+  groupID: 2000
+  # runtimeClassName: intentionally unset (NRI path: no 'nvidia' RuntimeClass)

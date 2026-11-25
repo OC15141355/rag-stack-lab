@@ -108,7 +108,7 @@ def test_provider_network_and_allowed_requests(out):
     cp = p["custom_provider_config"]
     assert cp["base_provider_type"] == "openai"
     assert cp["allowed_requests"] == {"list_models": True, "chat_completion": True, "chat_completion_stream": True}
-    up = CAT["upstream"]
+    up = CAT["providers"]["nvidia-hosted"]
     assert p["network_config"]["base_url"] == up["base_url"]
     assert p["network_config"]["default_request_timeout_in_seconds"] == up["timeout_seconds"]
     assert p["network_config"]["stream_idle_timeout_in_seconds"] == up["timeout_seconds"]
@@ -143,4 +143,98 @@ def test_check_mode_detects_drift(out):
     gen_ok(out, "--check")
 
 def test_committed_outputs_have_no_drift():
-    gen_ok(ROOT / "lab/envs", "--check")
+    r = subprocess.run([sys.executable, str(GEN), "--check"], capture_output=True, text=True, cwd=ROOT)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+# ---- Phase B: dev-gpu env, nim-local provider, per-env serving ----
+import hashlib
+
+# sha256 of the committed Phase A outputs BEFORE the Phase B generator change. Must never change.
+PHASE_A_SHA256 = {
+    "dev/generated/config.json": "2c717f86ff378bbf4b97c21ae810d960b2ac879aa4e52b4b18df0850f1dc1eb0",
+    "qa/generated/config.json": "7c3c2e5b3bc4a97a47211724430ca40c5f27b00784178f65b931e9c6a61b111c",
+    "prod/generated/config.json": "bc02c6749fa3e199727c61393a00383813c1bf47281cd8d113d9451a5a3247a1",
+    "dev/generated/models.json": "102b320a7943c2d5e89c637705a636b6a204e0bdce257ade86b18bd9706b2e1c",
+    "qa/generated/models.json": "102b320a7943c2d5e89c637705a636b6a204e0bdce257ade86b18bd9706b2e1c",
+    "prod/generated/models.json": "102b320a7943c2d5e89c637705a636b6a204e0bdce257ade86b18bd9706b2e1c",
+}
+
+def test_phase_a_outputs_byte_identical(out):
+    for rel, want in PHASE_A_SHA256.items():
+        assert hashlib.sha256((out / rel).read_bytes()).hexdigest() == want, rel
+        assert hashlib.sha256((ROOT / "lab/envs" / rel).read_bytes()).hexdigest() == want, rel
+
+def test_phase_a_envs_have_no_serving_and_no_gpu_models():
+    for env in ENVS:
+        assert "serving" not in CAT["environments"][env] and "dir" not in CAT["environments"][env]
+    small = next(m for m in CAT["models"] if m["alias"] == "chat/small")
+    assert small["envs"] == ["dev-gpu"]
+
+def test_dev_gpu_written_under_lab_gpu():
+    d = ROOT / "lab/gpu/envs/dev-gpu/generated"
+    assert (d / "config.json").exists() and (d / "models.json").exists()
+    assert not (ROOT / "lab/envs/dev-gpu").exists()
+
+def write_cat(tmp_path, mutate):
+    cat = yaml.safe_load((ROOT / "lab/catalogue/catalogue.yaml").read_text())
+    mutate(cat)
+    p = tmp_path / "cat.yaml"; p.write_text(yaml.safe_dump(cat)); return p
+
+def test_dev_gpu_serving_is_hosted_or_nim_local():
+    assert CAT["environments"]["dev-gpu"]["serving"] in ({"chat/small": "nvidia-hosted"}, {"chat/small": "nim-local"})
+
+def test_dev_gpu_hosted_baseline(tmp_path):
+    def hosted(c): c["environments"]["dev-gpu"]["serving"]["chat/small"] = "nvidia-hosted"
+    o = tmp_path / "o"
+    gen_ok(o, "--catalogue", str(write_cat(tmp_path, hosted)))
+    c = cfg(o, "dev-gpu")
+    jsonschema.validate(c, SCHEMA)
+    assert set(c["providers"]) == {"nvidia-hosted"}
+    key = c["providers"]["nvidia-hosted"]["keys"][0]
+    assert key["name"] == "nvidia-dev-gpu" and key["value"] == "env.NVIDIA_API_KEY"
+    assert key["aliases"] == {"chat/small": "meta/llama-3.1-8b-instruct"}
+    for vk in c["governance"]["virtual_keys"]:
+        assert vk["provider_configs"] == [{"provider": "nvidia-hosted", "weight": 1,
+                                           "allowed_models": ["chat/small"], "key_ids": ["*"]}]
+    m = json.loads((o / "dev-gpu/generated/models.json").read_text())["models"]
+    assert [x["id"] for x in m] == ["nvidia-hosted/chat/small"]
+    assert m[0]["capabilities"] == ["chat", "stream", "tools"]
+
+def test_dev_gpu_cutover_to_nim_local(tmp_path):
+    def cut(c): c["environments"]["dev-gpu"]["serving"]["chat/small"] = "nim-local"
+    o = tmp_path / "o"
+    gen_ok(o, "--catalogue", str(write_cat(tmp_path, cut)))
+    c = cfg(o, "dev-gpu")
+    jsonschema.validate(c, SCHEMA)
+    assert set(c["providers"]) == {"nim-local"}, "only referenced providers are emitted"
+    p = c["providers"]["nim-local"]
+    assert p["network_config"]["base_url"] == "http://llama-8b.raglab-gpu.svc.cluster.local:8000"
+    assert p["keys"][0]["value"] == "env.NIM_LOCAL_API_KEY" and p["keys"][0]["name"] == "nim-local-dev-gpu"
+    for vk in c["governance"]["virtual_keys"]:
+        assert vk["provider_configs"] == [{"provider": "nim-local", "weight": 1,
+                                           "allowed_models": ["chat/small"], "key_ids": ["*"]}]
+    m = json.loads((o / "dev-gpu/generated/models.json").read_text())["models"]
+    assert [x["id"] for x in m] == ["nim-local/chat/small"]
+    for rel, want in PHASE_A_SHA256.items():   # the cutover never touches Phase A envs
+        assert hashlib.sha256((o / rel).read_bytes()).hexdigest() == want, rel
+
+@pytest.mark.parametrize("mutate,msg", [
+    (lambda c: c["environments"]["dev-gpu"]["serving"].update({"chat/small": "nope"}), "unknown provider"),
+    (lambda c: c["environments"]["dev-gpu"]["serving"].update({"chat/missing": "nim-local"}), "unknown model"),
+    (lambda c: c["environments"]["dev"].update({"serving": {"chat/small": "nim-local"}}), "restricted to"),
+    (lambda c: c["environments"]["dev-gpu"].update({"serving": {}}), "serving is empty"),
+])
+def test_bad_serving_rejected(tmp_path, mutate, msg):
+    r = gen(tmp_path / "o", "--catalogue", str(write_cat(tmp_path, mutate)))
+    assert r.returncode == 2 and msg in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda c: c.pop("default_provider"),
+    lambda c: c.pop("providers"),
+    lambda c: c["providers"]["nvidia-hosted"].pop("key_name"),
+    lambda c: c["providers"]["nvidia-hosted"].pop("base_url"),
+])
+def test_missing_catalogue_keys_are_clean_errors(tmp_path, mutate):
+    r = gen(tmp_path / "o", "--catalogue", str(write_cat(tmp_path, mutate)))
+    assert r.returncode == 2 and "CATALOGUE ERROR" in r.stderr and "Traceback" not in r.stderr, r.stderr

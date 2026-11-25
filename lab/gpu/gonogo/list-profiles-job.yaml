@@ -1,0 +1,26 @@
+# GO/NO-GO (lab/gpu/README.md): applied BY HAND with kubectl, never by Argo (not in any kustomization).
+# Runs the NIM's own profile selector on the real A100 before any weights are downloaded.
+apiVersion: batch/v1
+kind: Job
+metadata: {name: list-model-profiles, namespace: raglab-gpu}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata: {labels: {app: list-model-profiles}}
+    spec:
+      restartPolicy: Never
+      imagePullSecrets: [{name: ngc-pull}]
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 2000, fsGroup: 2000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: list
+          image: nvcr.io/nim/meta/llama-3.1-8b-instruct:2.1.7@sha256:5ada92d1ca5c30069956e6e1322f0fbb250b4683b566aedb6547b10a64faf00b
+          command: [list-model-profiles]
+          env:
+            - name: NGC_API_KEY
+              valueFrom: {secretKeyRef: {name: ngc-api-key, key: NGC_API_KEY}}
+          resources:
+            requests: {cpu: "1", memory: 4Gi, nvidia.com/gpu: 1}
+            limits: {memory: 8Gi, nvidia.com/gpu: 1}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}

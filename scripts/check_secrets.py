@@ -2,14 +2,19 @@
 """Structural secrets checks for this repo (stdlib + PyYAML).
 
 Rules:
-  R1 every file under lab/secrets/ is named *.sops.yaml (paths are normalised first)
+  R1 every file under a secrets dir (lab/secrets/, lab/gpu/secrets/) is named *.sops.yaml
+     (paths are normalised first); the only exception is that dir's kustomization.yaml index
   R2 every file has >=1 YAML document, each with a top-level `sops:` block whose `mac` is ENC[...]
      and whose keys are all known sops keys
   R3 every leaf outside `sops:` is ENC[...], except apiVersion, kind, type,
      metadata.name and metadata.namespace; at least one ENC leaf must exist
   R4 generated Bifrost files (lab/envs/*/generated/*) contain no literal nvapi-/sk-bf- values
   R5 no age private key or PEM private-key header anywhere in scanned text files
-  R6 undecodable files under lab/secrets and explicit paths that do not exist are findings
+  R6 undecodable files under a secrets dir and explicit paths that do not exist are findings
+  R7 the age recipients of every secrets file equal those of the FIRST .sops.yaml creation rule whose
+     path_regex matches it (sops semantics), so a GPU-session file can never carry the Phase A key
+     and vice versa and carry no pgp/kms/gcp_kms/azure_kv/hc_vault/key_groups entries; a missing .sops.yaml
+     under --root is itself a finding (fails closed)
 Exit 0 clean, 1 findings, 2 usage.
 """
 from __future__ import annotations
@@ -31,6 +36,40 @@ SOPS_KEYS = {"kms", "gcp_kms", "azure_kv", "hc_vault", "age", "pgp", "lastmodifi
              "unencrypted_comment_regex", "encrypted_comment_regex", "mac_only_encrypted",
              "version", "shamir_threshold", "key_groups"}
 PLAIN_OK = {("apiVersion",), ("kind",), ("type",), ("metadata", "name"), ("metadata", "namespace")}
+NON_AGE = ("pgp", "kms", "gcp_kms", "azure_kv", "hc_vault", "key_groups")
+SECRET_DIRS = ("lab/secrets/", "lab/gpu/secrets/")
+
+def secrets_dir(rel: str) -> str | None:
+    return next((d for d in SECRET_DIRS if rel.startswith(d)), None)
+
+def sops_rules(root: Path) -> list[tuple[re.Pattern, set[str]]] | None:
+    f = root / ".sops.yaml"
+    if not f.is_file():
+        return None
+    rules = []
+    for r in (yaml.safe_load(f.read_text()) or {}).get("creation_rules") or []:
+        ages = r.get("age") or ""
+        ages = ages if isinstance(ages, list) else [a.strip() for a in ages.split(",")]
+        rules.append((re.compile(r.get("path_regex", "")), {a for a in ages if a}))
+    return rules
+
+def check_recipients(rel: str, text: str, rules) -> list[str]:
+    want = next((ages for rx, ages in rules if rx.search(rel)), None)
+    if want is None:
+        return [f"{rel}: no .sops.yaml creation rule matches this path"]
+    try:
+        docs = [d for d in yaml.safe_load_all(text) if isinstance(d, dict) and isinstance(d.get("sops"), dict)]
+    except yaml.YAMLError:
+        return []   # already reported by check_secret_file
+    out = []
+    for d in docs:
+        extra = [k for k in NON_AGE if d["sops"].get(k)]
+        if extra:
+            out.append(f"{rel}: sops block has non-age key types ({', '.join(extra)})")
+        got = {a.get("recipient") for a in d["sops"].get("age") or [] if isinstance(a, dict)}
+        if got != want:
+            out.append(f"{rel}: sops age recipients do not match the first matching .sops.yaml rule")
+    return out
 
 def leaves(node, path=()):
     if isinstance(node, dict):
@@ -43,7 +82,7 @@ def leaves(node, path=()):
 def is_secrets_kustomization(rel: str, text: str) -> list[str] | None:
     """The one non-sops file allowed under lab/secrets: a pure index of *.sops.yaml names.
     Returns None if rel isn't that file, else a (possibly empty) list of findings."""
-    if rel != "lab/secrets/kustomization.yaml":
+    if rel not in {d + "kustomization.yaml" for d in SECRET_DIRS}:
         return None
     class Strict(yaml.SafeLoader):
         pass
@@ -69,7 +108,7 @@ def check_secret_file(rel: str, text: str) -> list[str]:
         return k
     out = []
     if not rel.endswith(".sops.yaml"):
-        out.append(f"{rel}: files under lab/secrets must be *.sops.yaml")
+        out.append(f"{rel}: files under {secrets_dir(rel) or 'lab/secrets/'} must be *.sops.yaml")
     try:
         docs = [d for d in yaml.safe_load_all(text) if d is not None]
     except yaml.YAMLError as e:
@@ -121,12 +160,13 @@ def main() -> int:
     ap.add_argument("paths", nargs="*")
     a = ap.parse_args()
     root = Path(a.root)
+    rules = sops_rules(root)
     paths = a.paths or tracked_files(root)
     findings = []
     for raw in paths:
         rel = posixpath.normpath(raw)
         p = root / rel
-        in_secrets = rel.startswith("lab/secrets/")
+        in_secrets = secrets_dir(rel) is not None
         if not p.is_file():
             findings.append(f"{rel}: path does not exist or is not a file")
             continue
@@ -135,11 +175,16 @@ def main() -> int:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             if in_secrets:
-                findings.append(f"{rel}: undecodable (non-UTF-8) file under lab/secrets")
+                findings.append(f"{rel}: undecodable (non-UTF-8) file under {secrets_dir(rel)}")
                 continue
             text = data.decode("utf-8", errors="replace")
         if in_secrets:
             findings += check_secret_file(rel, text)
+            if not rel.endswith("/kustomization.yaml"):
+                if rules is None:
+                    findings.append(f"{rel}: no .sops.yaml: cannot verify recipients")
+                else:
+                    findings += check_recipients(rel, text, rules)
         findings += check_text(rel, text)
     for f in findings: print(f"FINDING {f}")
     return 1 if findings else 0

@@ -1,9 +1,18 @@
+import pytest
 import subprocess, sys, textwrap
 from pathlib import Path
 
 CHECK = Path(__file__).resolve().parents[1] / "scripts" / "check_secrets.py"
 
+DEFAULT_SOPS = ("creation_rules:\n  - path_regex: ^lab/(gpu/)?secrets/[a-z0-9-]+\\.sops\\.yaml$\n"
+                "    age: age1xyz\n")
+
 def run(root: Path, *paths: str):
+    if not (root / ".sops.yaml").exists():
+        (root / ".sops.yaml").write_text(DEFAULT_SOPS)
+    return run_raw(root, *paths)
+
+def run_raw(root: Path, *paths: str):
     return subprocess.run([sys.executable, str(CHECK), "--root", str(root), *paths],
                           capture_output=True, text=True)
 
@@ -153,3 +162,99 @@ def test_secrets_kustomization_wrong_apiversion_fails(tmp_path):
 def test_secrets_kustomization_duplicate_key_fails(tmp_path):
     body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\nresources: [../x.sops.yaml]\n"
     assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
+
+# ---- Phase B: lab/gpu/secrets coverage + recipients follow .sops.yaml (R7) ----
+SESSION = "age1lsw2ne59z5y02s074k2kmrqfda5tc363hvacn24v0g60x6n0hyqs5sd89v"
+PHASE_A = "age14c2r6yt9qlvj2mdl7k4hdg2rfpcga8ehpt4dnahfx2l8dvkdm50syjrs65"
+SOPS_CFG = f"""\
+creation_rules:
+  - path_regex: ^lab/gpu/secrets/[a-z0-9-]+\\.sops\\.yaml$
+    age: {SESSION}
+  - path_regex: ^lab/secrets/[a-z0-9-]+\\.sops\\.yaml$
+    age: {PHASE_A}
+"""
+
+def enc_for(recipient):
+    return ENC_OK.replace("age1xyz", recipient)
+
+def test_gpu_plaintext_value_fails(tmp_path):
+    body = ENC_OK.replace("ENC[AES256_GCM,data:abc,iv:x,tag:y,type:str]", "hunter2")
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", body))
+    assert r.returncode == 1 and "not ENC[" in r.stdout
+
+def test_gpu_wrong_filename_fails(tmp_path):
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.yaml", ENC_OK))
+    assert r.returncode == 1 and "lab/gpu/secrets/ must be *.sops.yaml" in r.stdout
+
+def test_gpu_kustomization_index_allowed(tmp_path):
+    k = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [gpu.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/kustomization.yaml", k)).returncode == 0
+    bad = k + "patches: []\n"
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/kustomization.yaml", bad)).returncode == 1
+
+def test_recipients_follow_first_matching_rule(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", enc_for(SESSION))).returncode == 0
+    assert run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", enc_for(PHASE_A))).returncode == 0
+
+def test_gpu_file_encrypted_to_phase_a_key_fails(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", enc_for(PHASE_A)))
+    assert r.returncode == 1 and "recipients do not match" in r.stdout
+
+def test_phase_a_file_with_session_key_fails(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    both = ENC_OK.replace("age: [{recipient: age1xyz}]", f"age: [{{recipient: {PHASE_A}}}, {{recipient: {SESSION}}}]")
+    r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", both))
+    assert r.returncode == 1 and "recipients do not match" in r.stdout
+
+def test_multi_document_gpu_file_checks_every_document(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    good = enc_for(SESSION)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", good + "---\n" + good)).returncode == 0
+    bad = good + "---\n" + enc_for(PHASE_A)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", bad)).returncode == 1
+
+
+# ---- fix round 1: R7 fails closed; non-age key types rejected ----
+def test_missing_sops_yaml_is_a_finding(tmp_path):
+    rel = w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", enc_for(SESSION))
+    r = run_raw(tmp_path, rel)
+    assert r.returncode == 1 and "no .sops.yaml: cannot verify recipients" in r.stdout
+
+def test_missing_sops_yaml_ok_when_no_secrets_paths(tmp_path):
+    rel = w(tmp_path, "README.md", "hello\n")
+    assert run_raw(tmp_path, rel).returncode == 0
+
+@pytest.mark.parametrize("extra", ["pgp: [{fp: ABCD}]", "kms: [{arn: x}]", "gcp_kms: [{resource_id: x}]",
+                                   "azure_kv: [{vault_url: x}]", "hc_vault: [{vault_address: x}]",
+                                   "key_groups: [{pgp: []}]"])
+def test_extra_key_types_fail(tmp_path, extra):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    body = enc_for(SESSION).replace("  age:", f"  {extra}\n  age:", 1)
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", body))
+    assert r.returncode == 1 and "non-age" in r.stdout
+
+def test_empty_extra_key_types_allowed(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    body = enc_for(SESSION).replace("  age:", "  pgp: []\n  kms: null\n  age:", 1)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", body)).returncode == 0
+
+def test_hook_copies_staged_sops_yaml(tmp_path):
+    import shutil
+    repo = tmp_path / "repo"; (repo / "scripts").mkdir(parents=True)
+    for f in ("pre-commit.sh", "check_secrets.py"):
+        shutil.copy(CHECK.parent / f, repo / "scripts" / f)
+    g = lambda *a: subprocess.run(["git", *a], cwd=repo, capture_output=True, text=True, check=True)
+    g("init", "-q")
+    (repo / ".sops.yaml").write_text(SOPS_CFG)
+    g("add", ".sops.yaml")      # committed earlier, NOT part of the staged change under test
+    g("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "cfg", "--no-verify")
+    w(repo, "lab/gpu/secrets/gpu.sops.yaml", enc_for(PHASE_A))
+    g("add", "lab")
+    h = subprocess.run(["bash", "scripts/pre-commit.sh"], cwd=repo, capture_output=True, text=True)
+    assert h.returncode != 0 and "recipients do not match" in h.stdout
+    assert "cannot verify" not in h.stdout
+    w(repo, "lab/gpu/secrets/gpu.sops.yaml", enc_for(SESSION)); g("add", "lab")
+    h = subprocess.run(["bash", "scripts/pre-commit.sh"], cwd=repo, capture_output=True, text=True)
+    assert "FINDING" not in h.stdout

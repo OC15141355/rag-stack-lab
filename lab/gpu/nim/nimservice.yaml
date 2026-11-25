@@ -1,0 +1,35 @@
+# Phase B (rented GPU cluster only). replicas 0 until the NIMCache is Ready, then 1 by PR.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata:
+  name: llama-8b
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  image:
+    repository: nvcr.io/nim/meta/llama-3.1-8b-instruct
+    tag: "2.1.7@sha256:5ada92d1ca5c30069956e6e1322f0fbb250b4683b566aedb6547b10a64faf00b"
+    pullPolicy: IfNotPresent
+    pullSecrets: [ngc-pull]
+  authSecret: ngc-api-key
+  storage:
+    nimCache: {name: llama-8b, profile: "PENDING-GO-NO-GO"}
+    readOnly: true
+    sharedMemorySizeLimit: 8Gi
+  labels: {app.kubernetes.io/component: nim-llm}
+  resources:
+    requests: {cpu: "4", memory: 24Gi, nvidia.com/gpu: 1}
+    limits: {memory: 24Gi, nvidia.com/gpu: 1}
+  # runtimeClassName: intentionally unset (NRI path: no 'nvidia' RuntimeClass)
+  replicas: 0
+  userID: 1000
+  groupID: 2000
+  startupProbe:
+    enabled: true
+    probe:
+      httpGet: {path: /v1/health/ready, port: 8000}
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 120
+  # Service name pinned so the catalogue's nim-local base_url is known before the session.
+  expose: {service: {name: llama-8b, type: ClusterIP, port: 8000}}

@@ -1,6 +1,11 @@
-# Single rule. Only Kubernetes Secret manifests under lab/secrets/*.sops.yaml are encrypted.
-# Recipient = lab-only age key (never the homelab key).
+# First matching rule wins (sops semantics), so the GPU-session rule MUST stay first.
+# Rule 1 (Phase B, temporary): lab/gpu/secrets/*.sops.yaml -> GPU-session age key ONLY. Removed by the
+#   teardown revert PR; the session private key is deleted at teardown, which makes that ciphertext dead.
+# Rule 2 (Phase A): lab/secrets/*.sops.yaml -> lab-only age key (never the homelab key).
 creation_rules:
+  - path_regex: ^lab/gpu/secrets/[a-z0-9-]+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1lsw2ne59z5y02s074k2kmrqfda5tc363hvacn24v0g60x6n0hyqs5sd89v
   - path_regex: ^lab/secrets/[a-z0-9-]+\.sops\.yaml$
     encrypted_regex: ^(data|stringData)$
     age: age14c2r6yt9qlvj2mdl7k4hdg2rfpcga8ehpt4dnahfx2l8dvkdm50syjrs65

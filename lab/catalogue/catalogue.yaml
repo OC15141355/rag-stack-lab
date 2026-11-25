@@ -1,9 +1,21 @@
-# lab/catalogue/catalogue.yaml — source of truth for models and per-env limits.
+# lab/catalogue/catalogue.yaml — source of truth for models, providers and per-env limits.
 # Limits are per env only (no shared defaults), so a limit change is always an env-scoped change.
-upstream:
-  provider: nvidia-hosted
-  base_url: https://integrate.api.nvidia.com
-  timeout_seconds: 300
+# An env without `serving` serves every model that has no `envs` list, from default_provider (Phase A).
+default_provider: nvidia-hosted
+providers:
+  nvidia-hosted:
+    base_url: https://integrate.api.nvidia.com
+    timeout_seconds: 300
+    key_name: nvidia            # Bifrost key name = <key_name>-<env>
+    key_env: NVIDIA_API_KEY     # key in the env's bifrost-env Secret
+  # Phase B, rented GPU cluster only: the in-cluster NIMService (Service name pinned by
+  # expose.service.name in lab/gpu/nim/nimservice.yaml). Plain HTTP inside the cluster. The NIM does
+  # not check the bearer, so NIM_LOCAL_API_KEY holds a non-secret placeholder.
+  nim-local:
+    base_url: http://llama-8b.raglab-gpu.svc.cluster.local:8000
+    timeout_seconds: 300
+    key_name: nim-local
+    key_env: NIM_LOCAL_API_KEY
 models:
   - alias: chat/glm
     upstream: z-ai/glm-5.3-flash
@@ -15,6 +27,12 @@ models:
     context_window: 131072
     max_output_tokens: 8192
     capabilities: [chat, stream]
+  - alias: chat/small
+    upstream: meta/llama-3.1-8b-instruct   # same served name on hosted and on the NIM
+    context_window: 131072
+    max_output_tokens: 4096
+    capabilities: [chat, stream, tools]
+    envs: [dev-gpu]
 # requests_per_minute: main virtual key (generous; normal smoke uses ~12 requests).
 # probe_requests_per_minute: a second, tiny virtual key used ONLY by the limit-429 check, so the 429 is
 # provably Bifrost's (only 2 calls ever reach upstream), never NVIDIA's own rate limit.
@@ -22,3 +40,11 @@ environments:
   dev:  {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
   qa:   {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
   prod: {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 7}
+  # Phase B: exists only on the rented GPU cluster (lab/gpu). Cutover = change chat/small's provider.
+  dev-gpu:
+    dir: gpu/envs/dev-gpu
+    serving: {chat/small: nvidia-hosted}
+    requests_per_minute: 28
+    tokens_per_minute: 60000
+    probe_requests_per_minute: 2
+    log_retention_days: 1
