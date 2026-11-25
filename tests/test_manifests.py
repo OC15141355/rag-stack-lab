@@ -20,10 +20,8 @@ def test_env_overlay(env):
     assert "@sha256:" in c["image"] and c["resources"]["limits"]["memory"]
     cms = [d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith("bifrost-config-")]
     assert cms, "configMapGenerator must add a hash suffix (forces rollout on change)"
-    # TEMP (acceptance criterion 4): PVC removed from git for the prune test; reverted by the next PR.
-    pvcs = [d for d in docs if d["kind"] == "PersistentVolumeClaim"]
-    for pvc in pvcs:
-        assert pvc["metadata"]["annotations"]["argocd.argoproj.io/sync-options"] == "Prune=false,Delete=false"
+    pvc = next(d for d in docs if d["kind"] == "PersistentVolumeClaim")
+    assert pvc["metadata"]["annotations"]["argocd.argoproj.io/sync-options"] == "Prune=false,Delete=false"
     job = next(d for d in docs if d["kind"] == "Job")
     assert job["metadata"]["annotations"]["argocd.argoproj.io/hook"] == "PostSync"
     jc = job["spec"]["template"]["spec"]["containers"][0]
