@@ -19,6 +19,6 @@ models:
 # probe_requests_per_minute: a second, tiny virtual key used ONLY by the limit-429 check, so the 429 is
 # provably Bifrost's (only 2 calls ever reach upstream), never NVIDIA's own rate limit.
 environments:
-  dev:  {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
-  qa:   {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
-  prod: {requests_per_minute: 30, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 7}
+  dev:  {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
+  qa:   {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 3}
+  prod: {requests_per_minute: 28, tokens_per_minute: 60000, probe_requests_per_minute: 2, log_retention_days: 7}
