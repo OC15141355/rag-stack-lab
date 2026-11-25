@@ -14,6 +14,19 @@
   vars:
     k3s_version: v1.37.2+k3s1
   tasks:
+    - name: Wait for first-boot cloud-init (sshd answers before it finishes; k3s install races it otherwise)
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+    - name: Install and enable qemu-guest-agent (the cloud image lacks it; needed for qm shutdown with agent=1)
+      ansible.builtin.apt:
+        name: qemu-guest-agent
+        state: present
+        update_cache: true
+    - name: Ensure qemu-guest-agent is running
+      ansible.builtin.systemd:
+        name: qemu-guest-agent
+        state: started
+        enabled: true
     - name: Download k3s binary at the pinned version (checksum-verified)
       ansible.builtin.get_url:
         url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/k3s"

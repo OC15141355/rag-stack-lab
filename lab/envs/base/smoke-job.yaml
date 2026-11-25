@@ -18,7 +18,7 @@ spec:
           image: python:3.12-slim@sha256:a0e2dd78cc679ddfffea960fe45ecfcff9ac2f68d67917a0edfcde5c2100151b
           command: ["python3", "/smoke/smoke.py", "--base-url", "http://bifrost/v1",
                     "--models-file", "/catalogue/models.json", "--header-env", "x-bf-vk=BIFROST_VK",
-                    "--expect-auth", "virtual key", "--limit-burst", "3",
+                    "--expect-auth", "virtual key", "--limit-burst", "4",
                     "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit violated for vk",
                     "--require-negative-checks", "--require-revision", "--max-ttft", "90",
                     "--max-tokens", "1024", "--json-report", "/tmp/report.json"]
