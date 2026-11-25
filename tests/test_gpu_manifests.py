@@ -82,3 +82,42 @@ def test_gpu_check_job_pinned_and_unprivileged():
     assert c["image"] == NIM_IMAGE and c["command"][0] == "nvidia-smi"
     assert c["resources"]["limits"]["nvidia.com/gpu"] == 1 and "runtimeClassName" not in s
     assert s["securityContext"]["runAsNonRoot"] is True and c["securityContext"]["allowPrivilegeEscalation"] is False
+
+# ---- Task 5: dev-gpu overlay, catalogue agreement, NetworkPolicy probes ----
+def test_service_name_and_port_match_catalogue():
+    (svc,) = by(build("lab/gpu/nim"), "NIMService")
+    cat = yaml.safe_load((ROOT / "lab/catalogue/catalogue.yaml").read_text())
+    u = urlparse(cat["providers"]["nim-local"]["base_url"])
+    e = svc["spec"]["expose"]["service"]
+    assert u.hostname == f'{e["name"]}.raglab-gpu.svc.cluster.local' and u.port == e["port"] == 8000
+
+def test_dev_gpu_overlay():
+    docs = build("lab/gpu/envs/dev-gpu")
+    for d in docs:
+        assert d["metadata"]["namespace"] == "raglab-dev-gpu", d["metadata"]["name"]
+    assert not by(docs, "IngressRoute"), "no Traefik on the rented cluster"
+    assert [d for d in by(docs, "ConfigMap") if d["metadata"]["name"].startswith("bifrost-config-")]
+    base = by(build("lab/envs/dev"), "NetworkPolicy", "bifrost")[0]["spec"]
+    assert by(docs, "NetworkPolicy", "bifrost")[0]["spec"] == base, "Phase A base policy reused unchanged"
+    nim = by(docs, "NetworkPolicy", "bifrost-to-nim")[0]["spec"]
+    assert nim == {"podSelector": {"matchLabels": {"app": "bifrost"}}, "policyTypes": ["Egress"],
+                   "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "raglab-gpu"}},
+                                       "podSelector": {"matchLabels": {"app.kubernetes.io/component": "nim-llm"}}}],
+                               "ports": [{"port": 8000, "protocol": "TCP"}]}]}
+    for d in by(docs, "Deployment") + by(docs, "Job"):
+        s = d["spec"]["template"]["spec"]
+        assert s["securityContext"]["runAsNonRoot"] is True and s["securityContext"]["seccompProfile"]["type"] == "RuntimeDefault"
+
+def test_netpol_probes():
+    docs = [d for d in yaml.safe_load_all((ROOT / "lab/gpu/probes/netpol-probes.yaml").read_text()) if d]
+    pods = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Pod"}
+    assert {(n, p["metadata"]["namespace"], p["metadata"]["labels"]["app"]) for n, p in pods.items()} == {
+        ("probe-as-bifrost", "raglab-dev-gpu", "bifrost"), ("probe-unlabelled", "raglab-dev-gpu", "probe"),
+        ("probe-other-ns", "default", "bifrost")}
+    for p in pods.values():
+        c = p["spec"]["containers"][0]
+        assert "@sha256:" in c["image"] and p["spec"]["securityContext"]["runAsNonRoot"] is True
+        assert c["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    cms = [d for d in docs if d["kind"] == "ConfigMap"]
+    assert {d["metadata"]["namespace"] for d in cms} == {"raglab-dev-gpu", "default"}
+    assert all("llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready" in d["data"]["probe.py"] for d in cms)

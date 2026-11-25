@@ -1,0 +1,22 @@
+# HAND-APPLIED on the rented GPU cluster only. Not under lab/gpu/argocd/apps, so a merge cannot widen it.
+# GPU env apps only: no cluster-scoped kinds, no RBAC, no ServiceAccounts.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: raglab-gpu, namespace: argocd}
+spec:
+  sourceNamespaces: [raglab-apps]
+  sourceRepos: [https://github.com/OC15141355/rag-stack-lab.git]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: raglab-gpu}
+    - {server: https://kubernetes.default.svc, namespace: raglab-dev-gpu}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: "", kind: Service}
+    - {group: "", kind: PersistentVolumeClaim}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: apps.nvidia.com, kind: NIMService}
+    - {group: apps.nvidia.com, kind: NIMCache}

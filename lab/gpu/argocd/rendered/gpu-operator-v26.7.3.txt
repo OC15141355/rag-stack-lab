@@ -1,0 +1,36 @@
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/clusterpolicies.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/computedomaincliques.resource.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/computedomains.resource.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/gpuclusters.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nodefeaturegroups.nfd.k8s-sigs.io
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nodefeaturerules.nfd.k8s-sigs.io
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nodefeatures.nfd.k8s-sigs.io
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nvidiadrivers.nvidia.com
+CLUSTER nvidia.com/ClusterPolicy/cluster-policy
+CLUSTER rbac.authorization.k8s.io/ClusterRole/gpu-operator
+CLUSTER rbac.authorization.k8s.io/ClusterRole/gpu-operator-node-feature-discovery
+CLUSTER rbac.authorization.k8s.io/ClusterRole/gpu-operator-node-feature-discovery-gc
+CLUSTER rbac.authorization.k8s.io/ClusterRole/gpu-operator-node-feature-discovery-prune
+CLUSTER rbac.authorization.k8s.io/ClusterRole/gpu-operator-upgrade-crd-hook-role
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-node-feature-discovery
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-node-feature-discovery-gc
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-node-feature-discovery-prune
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-upgrade-crd-hook-binding
+HOOK    post-delete  /ServiceAccount/gpu-operator-node-feature-discovery-prune
+HOOK    post-delete  batch/Job/gpu-operator-node-feature-discovery-prune
+HOOK    post-delete  rbac.authorization.k8s.io/ClusterRole/gpu-operator-node-feature-discovery-prune
+HOOK    post-delete  rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-node-feature-discovery-prune
+HOOK    pre-delete  batch/Job/gpu-operator-cleanup-gpucluster
+HOOK    pre-upgrade  /ServiceAccount/gpu-operator-upgrade-crd-hook-sa
+HOOK    pre-upgrade  batch/Job/gpu-operator-upgrade-crd
+HOOK    pre-upgrade  rbac.authorization.k8s.io/ClusterRole/gpu-operator-upgrade-crd-hook-role
+HOOK    pre-upgrade  rbac.authorization.k8s.io/ClusterRoleBinding/gpu-operator-upgrade-crd-hook-binding
+NS      /ConfigMap
+NS      /ServiceAccount
+NS      apps/DaemonSet
+NS      apps/Deployment
+NS      batch/Job
+NS      rbac.authorization.k8s.io/Role
+NS      rbac.authorization.k8s.io/RoleBinding
+SHA256 cb54957d282abefb6bc6cd0d5e9b2358af77a82ba4d5f6a5537e688e4c0dd71b

@@ -1,0 +1,17 @@
+# File name avoids "secret" (.gitignore `*secret*`); the Application is raglab-gpu-secrets (CMP guard name).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: raglab-gpu-secrets, namespace: raglab-apps, finalizers: [resources-finalizer.argocd.argoproj.io]}
+spec:
+  project: raglab-gpu
+  source:
+    repoURL: https://github.com/OC15141355/rag-stack-lab.git
+    targetRevision: main
+    path: lab/gpu/secrets
+    plugin: {name: sops-kustomize}
+  # Manifests carry their own namespaces (raglab-gpu, raglab-dev-gpu); each is still checked by the project.
+  destination: {server: https://kubernetes.default.svc, namespace: raglab-gpu}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [ServerSideApply=true]
+    retry: {limit: 10, backoff: {duration: 30s, factor: 2, maxDuration: 5m}}

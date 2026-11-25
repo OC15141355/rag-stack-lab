@@ -1,0 +1,33 @@
+# HAND-APPLIED on the rented GPU cluster only (project raglab-gpu-platform). Values are inline so a merge
+# cannot change them. If you change valuesObject, re-render lab/gpu/argocd/rendered/gpu-operator-v26.7.3.txt.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: raglab-gpu-operator
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: raglab-gpu-platform
+  source:
+    repoURL: https://helm.ngc.nvidia.com/nvidia
+    chart: gpu-operator
+    targetRevision: v26.7.3
+    helm:
+      releaseName: gpu-operator
+      valuesObject:
+        driver: {enabled: false}             # Lambda Stack ships the driver; gate: nvidia-smi passes first
+        toolkit: {enabled: true}             # operator-managed toolkit + CDI spec (see lab/gpu/README.md, NRI)
+        cdi: {enabled: true, nriPluginEnabled: true}   # NRI: no k3s containerd vars, no 'nvidia' RuntimeClass
+        nfd: {enabled: true}
+        dcgm: {enabled: false}
+        dcgmExporter: {enabled: false, serviceMonitor: {enabled: false}}
+        migManager: {enabled: false}
+        nodeStatusExporter: {enabled: false}
+  destination: {server: https://kubernetes.default.svc, namespace: gpu-operator}
+  # The operator mutates ClusterPolicy defaults/status; ignore the fields its own manager owns.
+  ignoreDifferences:
+    - {group: nvidia.com, kind: ClusterPolicy, managedFieldsManagers: [gpu-operator]}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
+    retry: {limit: 5, backoff: {duration: 30s, factor: 2, maxDuration: 5m}}

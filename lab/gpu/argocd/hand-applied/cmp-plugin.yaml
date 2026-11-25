@@ -1,0 +1,27 @@
+# HAND-APPLIED on the rented GPU cluster only (same ConfigMap name and key as Phase A, so the shared
+# lab/argocd/argocd-values.yaml mounts it unchanged). The guard admits only raglab-gpu-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cmp-plugin, namespace: argocd}
+data:
+  sops-kustomize.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata: {name: sops-kustomize}
+    spec:
+      allowConcurrency: true
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            # Only raglab-gpu-secrets may use this plugin (it holds the session age key).
+            [ "$ARGOCD_APP_NAME" = raglab-apps_raglab-gpu-secrets ] && [ "$ARGOCD_APP_SOURCE_PATH" = lab/gpu/secrets ] || { echo "sops-kustomize: not permitted for $ARGOCD_APP_NAME" >&2; exit 1; }
+            # Fail closed: a decrypt failure fails the render.
+            for f in $(find . -type f -name "*.sops.yaml"); do
+              if ! err=$(sops --decrypt --in-place "$f" 2>&1); then
+                echo "sops decrypt FAILED for $f: $err" >&2; exit 1
+              fi
+            done
+            kustomize build .
+      lockRepo: false

@@ -1,0 +1,25 @@
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nemocustomizers.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nemodatastores.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nemoentitystores.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nemoevaluators.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nemoguardrails.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nimbuilds.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nimcaches.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nimpipelines.apps.nvidia.com
+CLUSTER apiextensions.k8s.io/CustomResourceDefinition/nimservices.apps.nvidia.com
+CLUSTER rbac.authorization.k8s.io/ClusterRole/k8s-nim-operator-metrics-reader
+CLUSTER rbac.authorization.k8s.io/ClusterRole/k8s-nim-operator-role
+CLUSTER rbac.authorization.k8s.io/ClusterRole/nim-operator-upgrade-crd-hook-role
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/k8s-nim-operator-rolebinding
+CLUSTER rbac.authorization.k8s.io/ClusterRoleBinding/nim-operator-upgrade-crd-hook-binding
+HOOK    pre-upgrade  /ServiceAccount/nim-operator-upgrade-crd-hook-sa
+HOOK    pre-upgrade  batch/Job/nim-operator-upgrade-crd
+HOOK    pre-upgrade  rbac.authorization.k8s.io/ClusterRole/nim-operator-upgrade-crd-hook-role
+HOOK    pre-upgrade  rbac.authorization.k8s.io/ClusterRoleBinding/nim-operator-upgrade-crd-hook-binding
+NS      /Service
+NS      /ServiceAccount
+NS      apps/Deployment
+NS      batch/Job
+NS      rbac.authorization.k8s.io/Role
+NS      rbac.authorization.k8s.io/RoleBinding
+SHA256 8bc2cfc8ec6d1859425f1abe49425e964bcf63bd8f2e68cd2152d5b01f230615

@@ -1,0 +1,47 @@
+# HAND-APPLIED on the rented GPU cluster only. Only the GPU Operator (v26.7.3) and NIM Operator (3.1.4),
+# only what their charts render with the inline values: lab/gpu/argocd/rendered/*.txt (CI-enforced).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: raglab-gpu-platform, namespace: argocd}
+spec:
+  sourceRepos: [https://helm.ngc.nvidia.com/nvidia]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: gpu-operator}
+    - {server: https://kubernetes.default.svc, namespace: raglab-system}
+  clusterResourceWhitelist:
+    # GPU Operator v26.7.3
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: clusterpolicies.nvidia.com}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: computedomaincliques.resource.nvidia.com}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: computedomains.resource.nvidia.com}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: gpuclusters.nvidia.com}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: nodefeaturegroups.nfd.k8s-sigs.io}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: nodefeaturerules.nfd.k8s-sigs.io}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: nodefeatures.nfd.k8s-sigs.io}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: nvidiadrivers.nvidia.com}
+    - {group: nvidia.com, kind: ClusterPolicy, name: cluster-policy}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: gpu-operator}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: gpu-operator-node-feature-discovery}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: gpu-operator-node-feature-discovery-gc}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: gpu-operator-node-feature-discovery-prune}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: gpu-operator-upgrade-crd-hook-role}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: gpu-operator}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: gpu-operator-node-feature-discovery}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: gpu-operator-node-feature-discovery-gc}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: gpu-operator-node-feature-discovery-prune}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: gpu-operator-upgrade-crd-hook-binding}
+    # NIM Operator 3.1.4 (same names as Phase A's raglab-platform)
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition, name: "*.apps.nvidia.com"}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: k8s-nim-operator-role}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: k8s-nim-operator-metrics-reader}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole, name: nim-operator-upgrade-crd-hook-role}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: k8s-nim-operator-rolebinding}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding, name: nim-operator-upgrade-crd-hook-binding}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Service}
+    - {group: apps, kind: DaemonSet}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}

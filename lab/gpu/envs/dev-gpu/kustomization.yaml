@@ -1,0 +1,18 @@
+# Phase B (rented GPU cluster only): Bifrost for dev-gpu, reusing the Phase A base unchanged.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: raglab-dev-gpu
+resources: [../../../envs/base, networkpolicy-nim-egress.yaml]
+configMapGenerator:
+  - name: bifrost-config
+    files: [config.json=generated/config.json, models.json=generated/models.json]
+commonAnnotations:
+  raglab/env: dev-gpu
+patches:
+  # k3s on the rented VM runs without Traefik: nothing is published, Bifrost is reached by port-forward.
+  - patch: |-
+      $patch: delete
+      apiVersion: traefik.io/v1alpha1
+      kind: IngressRoute
+      metadata:
+        name: bifrost-v1

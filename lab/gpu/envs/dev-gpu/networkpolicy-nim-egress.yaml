@@ -1,0 +1,12 @@
+# Additive to the base `bifrost` policy (which excludes RFC1918): Bifrost may also reach the in-cluster NIM.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: bifrost-to-nim}
+spec:
+  podSelector: {matchLabels: {app: bifrost}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: raglab-gpu}}
+          podSelector: {matchLabels: {app.kubernetes.io/component: nim-llm}}
+      ports: [{port: 8000, protocol: TCP}]
