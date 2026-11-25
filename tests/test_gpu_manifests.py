@@ -159,6 +159,6 @@ def test_runbook_never_pairs_tee_with_exit_code_echo():
     text = (ROOT / "lab/gpu/README.md").read_text()
     for line in text.splitlines():
         assert not ("| tee" in line and "$?" in line), line   # `cmd | tee f; echo exit=$?` reports tee's status
-    assert "key_probe.py hosted --chat meta/llama-3.1-8b-instruct; echo exit=$?" in text
+    assert "key_probe.py hosted --chat z-ai/glm-5.3-flash; echo exit=$?" in text
     assert text.count("scripts/gpu-ansible.sh playbooks/") == 4 and "ansible-playbook -i" not in text
     assert "mkdir -p -m 700 \"$RG\" \"$RG/evidence\"" in text and "--core" in text and "password" in text

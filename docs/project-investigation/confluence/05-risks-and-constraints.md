@@ -33,6 +33,18 @@ L = likelihood, I = impact.
 | L6 | GitHub push protection does not recognise NVIDIA keys | gitleaks with a custom `nvapi-` rule in pre-commit and CI |
 | L7 | Secret changes via `envFrom` do not restart pods | `rollout restart` after a Secret change |
 
+**Verified on a rented A100 (2026-11-26), NIM 2.1.7 + NIM Operator 3.1.4 + Bifrost v2.6:**
+
+| # | Risk | Mitigation |
+|---|---|---|
+| L8 | A read-only weights PVC stops the NIM starting ("cache directory not accessible") | Mount the cache read-write; protect it with prune/delete protection instead |
+| L9 | Default-deny NetworkPolicy blocks the NIM Operator's readiness call; NIMService stays NotReady with a healthy pod | Allow the operator namespace to the NIM port alongside the gateway |
+| L10 | Bifrost refuses in-cluster (RFC1918) upstreams by default (HTTP 502) | `allow_private_network: true` on self-hosted providers only |
+| L11 | Tool calling off by default; `NIM_ENABLE_AUTO_TOOL_CHOICE` env did not reach the engine on this profile | `NIM_PASSTHROUGH_ARGS="--enable-auto-tool-choice --tool-call-parser <parser>"`; smoke-test tools per model |
+| L12 | Gateway `/v1/models` passes with the backend down | Health gates must make a real completion |
+| L13 | Hosted models retired without notice; hosted latency varies 2 s to 250 s by caller location | Scheduled list + call check; measure from where it runs |
+| L14 | Git-revert rollback conflicts in generated config | Resolve by regenerating from the catalogue, then `--check` |
+
 ## Risks of not changing
 
 | Risk | Impact |
