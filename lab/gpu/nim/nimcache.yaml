@@ -14,7 +14,7 @@ spec:
       pullSecret: ngc-pull
       authSecret: ngc-api-key
       model:
-        profiles: ["PENDING-GO-NO-GO"]
+        profiles: ["092ed4213624e774d24cdaf84e3b6222839bab2008a21d3c214ab46626366f90"]
   storage:
     pvc: {create: true, storageClass: local-path, size: 60Gi, volumeAccessMode: ReadWriteOnce}
   tolerations: []          # single node, no GPU taint
