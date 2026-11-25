@@ -1,0 +1,90 @@
+# Applied BY HAND after the NIMService is Ready (lab/gpu/README.md, NetworkPolicy probes). Each pod makes one
+# HTTP GET to the NIM's /v1/health/ready and prints PROBE <name> status=<code> or PROBE <name> BLOCKED.
+#   probe-as-bifrost  raglab-dev-gpu, label app=bifrost  -> expect status=200 (allowed path)
+#   probe-unlabelled  raglab-dev-gpu, label app=probe    -> expect BLOCKED (NIM ingress policy)
+#   probe-other-ns    default,        label app=bifrost  -> expect BLOCKED (namespaceSelector)
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: netpol-probe, namespace: raglab-dev-gpu}
+data:
+  probe.py: |
+    import os, socket, urllib.error, urllib.request
+    n, u = os.environ["PROBE"], "http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready"
+    # status=<code> for ANY HTTP answer (a 503 means the policy let us through); BLOCKED only for timeout/refused/reset.
+    try:
+        print(f"PROBE {n} status={urllib.request.urlopen(u, timeout=8).status}")
+    except urllib.error.HTTPError as e:
+        print(f"PROBE {n} status={e.code}")
+    except (urllib.error.URLError, OSError) as e:
+        r = getattr(e, "reason", e)
+        if isinstance(r, (TimeoutError, ConnectionError, socket.timeout)):
+            print(f"PROBE {n} BLOCKED ({r.__class__.__name__})")
+        else:
+            print(f"PROBE {n} ERROR ({r.__class__.__name__}): not a policy verdict")
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: netpol-probe, namespace: default}
+data:
+  probe.py: |
+    import os, socket, urllib.error, urllib.request
+    n, u = os.environ["PROBE"], "http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready"
+    # status=<code> for ANY HTTP answer (a 503 means the policy let us through); BLOCKED only for timeout/refused/reset.
+    try:
+        print(f"PROBE {n} status={urllib.request.urlopen(u, timeout=8).status}")
+    except urllib.error.HTTPError as e:
+        print(f"PROBE {n} status={e.code}")
+    except (urllib.error.URLError, OSError) as e:
+        r = getattr(e, "reason", e)
+        if isinstance(r, (TimeoutError, ConnectionError, socket.timeout)):
+            print(f"PROBE {n} BLOCKED ({r.__class__.__name__})")
+        else:
+            print(f"PROBE {n} ERROR ({r.__class__.__name__}): not a policy verdict")
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: probe-as-bifrost, namespace: raglab-dev-gpu, labels: {app: bifrost, raglab/probe: "true"}}
+spec:
+  restartPolicy: Never
+  securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: probe
+      image: python:3.12-slim@sha256:a0e2dd78cc679ddfffea960fe45ecfcff9ac2f68d67917a0edfcde5c2100151b
+      command: [python3, /probe/probe.py]
+      env: [{name: PROBE, valueFrom: {fieldRef: {fieldPath: metadata.name}}}]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+      volumeMounts: [{name: probe, mountPath: /probe}]
+  volumes: [{name: probe, configMap: {name: netpol-probe}}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: probe-unlabelled, namespace: raglab-dev-gpu, labels: {app: probe, raglab/probe: "true"}}
+spec:
+  restartPolicy: Never
+  securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: probe
+      image: python:3.12-slim@sha256:a0e2dd78cc679ddfffea960fe45ecfcff9ac2f68d67917a0edfcde5c2100151b
+      command: [python3, /probe/probe.py]
+      env: [{name: PROBE, valueFrom: {fieldRef: {fieldPath: metadata.name}}}]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+      volumeMounts: [{name: probe, mountPath: /probe}]
+  volumes: [{name: probe, configMap: {name: netpol-probe}}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: probe-other-ns, namespace: default, labels: {app: bifrost, raglab/probe: "true"}}
+spec:
+  restartPolicy: Never
+  securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: probe
+      image: python:3.12-slim@sha256:a0e2dd78cc679ddfffea960fe45ecfcff9ac2f68d67917a0edfcde5c2100151b
+      command: [python3, /probe/probe.py]
+      env: [{name: PROBE, valueFrom: {fieldRef: {fieldPath: metadata.name}}}]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+      volumeMounts: [{name: probe, mountPath: /probe}]
+  volumes: [{name: probe, configMap: {name: netpol-probe}}]

@@ -1,0 +1,16 @@
+# Phase B (rented GPU VM, standalone): selected with -e gpu_session=true. Never used for the home lab.
+kubeconfig_name: kubeconfig.gpu          # gitignored (kubeconfig.*); server stays https://127.0.0.1:6443
+rewrite_kubeconfig_server: false         # the API is reached only through an SSH tunnel (lab/gpu/README.md)
+install_guest_agent: false               # not a Proxmox VM
+gpu_host_prep: true
+k3s_exec: server --secrets-encryption --write-kubeconfig-mode 0600 --disable traefik --disable servicelb
+hand_applied_dir: gpu/argocd/hand-applied
+age_key_relpath: .sops/raglab-gpu-session/age-key.txt   # session key; the Phase A key never leaves the Mac
+app_projects: [appproject-raglab-gpu.yaml, appproject-raglab-gpu-platform.yaml]
+platform_apps: [raglab-gpu-operator.yaml, raglab-nim-operator.yaml]
+required_apps:
+  - argocd/raglab-gpu-root
+  - argocd/raglab-gpu-operator
+  - argocd/raglab-nim-operator
+  - raglab-apps/raglab-gpu-secrets
+  - raglab-apps/raglab-dev-gpu

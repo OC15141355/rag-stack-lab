@@ -82,3 +82,78 @@ def test_gpu_check_job_pinned_and_unprivileged():
     assert c["image"] == NIM_IMAGE and c["command"][0] == "nvidia-smi"
     assert c["resources"]["limits"]["nvidia.com/gpu"] == 1 and "runtimeClassName" not in s
     assert s["securityContext"]["runAsNonRoot"] is True and c["securityContext"]["allowPrivilegeEscalation"] is False
+
+# ---- Task 5: dev-gpu overlay, catalogue agreement, NetworkPolicy probes ----
+def test_service_name_and_port_match_catalogue():
+    (svc,) = by(build("lab/gpu/nim"), "NIMService")
+    cat = yaml.safe_load((ROOT / "lab/catalogue/catalogue.yaml").read_text())
+    u = urlparse(cat["providers"]["nim-local"]["base_url"])
+    e = svc["spec"]["expose"]["service"]
+    assert u.hostname == f'{e["name"]}.raglab-gpu.svc.cluster.local' and u.port == e["port"] == 8000
+
+def test_dev_gpu_overlay():
+    docs = build("lab/gpu/envs/dev-gpu")
+    for d in docs:
+        assert d["metadata"]["namespace"] == "raglab-dev-gpu", d["metadata"]["name"]
+    assert not by(docs, "IngressRoute"), "no Traefik on the rented cluster"
+    assert [d for d in by(docs, "ConfigMap") if d["metadata"]["name"].startswith("bifrost-config-")]
+    base = by(build("lab/envs/dev"), "NetworkPolicy", "bifrost")[0]["spec"]
+    assert by(docs, "NetworkPolicy", "bifrost")[0]["spec"] == base, "Phase A base policy reused unchanged"
+    nim = by(docs, "NetworkPolicy", "bifrost-to-nim")[0]["spec"]
+    assert nim == {"podSelector": {"matchLabels": {"app": "bifrost"}}, "policyTypes": ["Egress"],
+                   "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "raglab-gpu"}},
+                                       "podSelector": {"matchLabels": {"app.kubernetes.io/component": "nim-llm"}}}],
+                               "ports": [{"port": 8000, "protocol": "TCP"}]}]}
+    for d in by(docs, "Deployment") + by(docs, "Job"):
+        s = d["spec"]["template"]["spec"]
+        assert s["securityContext"]["runAsNonRoot"] is True and s["securityContext"]["seccompProfile"]["type"] == "RuntimeDefault"
+
+def test_netpol_probes():
+    docs = [d for d in yaml.safe_load_all((ROOT / "lab/gpu/probes/netpol-probes.yaml").read_text()) if d]
+    pods = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Pod"}
+    assert {(n, p["metadata"]["namespace"], p["metadata"]["labels"]["app"]) for n, p in pods.items()} == {
+        ("probe-as-bifrost", "raglab-dev-gpu", "bifrost"), ("probe-unlabelled", "raglab-dev-gpu", "probe"),
+        ("probe-other-ns", "default", "bifrost")}
+    for p in pods.values():
+        c = p["spec"]["containers"][0]
+        assert "@sha256:" in c["image"] and p["spec"]["securityContext"]["runAsNonRoot"] is True
+        assert c["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    cms = [d for d in docs if d["kind"] == "ConfigMap"]
+    assert {d["metadata"]["namespace"] for d in cms} == {"raglab-dev-gpu", "default"}
+    assert all("llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready" in d["data"]["probe.py"] for d in cms)
+
+
+def _probe_script():
+    docs = [d for d in yaml.safe_load_all((ROOT / "lab/gpu/probes/netpol-probes.yaml").read_text()) if d]
+    return [d for d in docs if d["kind"] == "ConfigMap"][0]["data"]["probe.py"]
+
+def _run_probe(url, tmp_path):
+    import subprocess, sys
+    src = _probe_script().replace("http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready", url)
+    f = tmp_path / "probe.py"; f.write_text(src)
+    return subprocess.run([sys.executable, str(f)], env={"PROBE": "p", "PATH": "/usr/bin"}, capture_output=True, text=True).stdout.strip()
+
+def test_probe_reports_http_codes_and_blocks_only_on_network_failure(tmp_path):
+    import threading, socket
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            code = 503 if self.path == "/503" else 200
+            self.send_response(code); self.send_header("Content-Length", "0"); self.end_headers()
+    s = HTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start()
+    port = s.server_address[1]
+    assert _run_probe(f"http://127.0.0.1:{port}/ok", tmp_path) == "PROBE p status=200"
+    assert _run_probe(f"http://127.0.0.1:{port}/503", tmp_path) == "PROBE p status=503"
+    s.shutdown(); s.server_close()
+    assert _run_probe(f"http://127.0.0.1:{port}/ok", tmp_path).startswith("PROBE p BLOCKED (ConnectionRefusedError")
+    assert "ERROR" in _run_probe("http://no-such-host.invalid/", tmp_path)
+
+
+def test_runbook_never_pairs_tee_with_exit_code_echo():
+    text = (ROOT / "lab/gpu/README.md").read_text()
+    for line in text.splitlines():
+        assert not ("| tee" in line and "$?" in line), line   # `cmd | tee f; echo exit=$?` reports tee's status
+    assert "key_probe.py hosted --chat meta/llama-3.1-8b-instruct; echo exit=$?" in text
+    assert text.count("scripts/gpu-ansible.sh playbooks/") == 4 and "ansible-playbook -i" not in text
+    assert "mkdir -p -m 700 \"$RG\" \"$RG/evidence\"" in text and "--core" in text and "password" in text

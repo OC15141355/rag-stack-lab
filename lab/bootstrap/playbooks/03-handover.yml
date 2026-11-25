@@ -1,23 +1,29 @@
 # Fail closed: every required Application must exist and be Synced/Healthy with a
 # Succeeded (or no) last operation, unless named in handover_allow_unhealthy
 # (entries are namespace/name, e.g. raglab-apps/raglab-dev).
+# Mode: Phase A by default; -e gpu_session=true selects ../vars/gpu-session.yml (required_apps, kubeconfig).
 - hosts: localhost
   connection: local
   gather_facts: false
-  environment: {KUBECONFIG: "{{ playbook_dir }}/../kubeconfig"}
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
+  environment: {KUBECONFIG: "{{ kubeconfig_path }}"}
   vars:
+    kubeconfig_path: "{{ kubeconfig_dir | default(playbook_dir ~ '/..') }}/{{ kubeconfig_name }}"
+    kc_tunnel_re: '^https://127\.0\.0\.1:[0-9]+$'
+    kc_private_re: '^https://(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):[0-9]+$'
     handover_allow_unhealthy: []   # deliberate exceptions, e.g. -e '{"handover_allow_unhealthy":["raglab-apps/raglab-dev"]}'
-    required_apps:
-      - argocd/raglab-root
-      - argocd/raglab-system
-      - raglab-apps/raglab-secrets
-      - raglab-apps/raglab-dev
-      - raglab-apps/raglab-qa
-      - raglab-apps/raglab-prod
-      - raglab-apps/raglab-nim-dev
-      - raglab-apps/raglab-nim-qa
-      - raglab-apps/raglab-nim-prod
   tasks:
+    - name: Pre-flight - read the kubeconfig server (fails if the kubeconfig is missing)
+      ansible.builtin.shell: grep -m1 -E '^[[:space:]]*server:' "{{ kubeconfig_path }}" | awk '{print $2}'
+      register: kcs
+      changed_when: false
+    - name: "Pre-flight: Phase A kubeconfig must point at a private address, GPU mode only at the SSH tunnel (https://127.0.0.1:PORT)"
+      ansible.builtin.assert:
+        that: >-
+          (gpu_session | default(false) | bool and kcs.stdout is match(kc_tunnel_re)) or
+          (not (gpu_session | default(false) | bool) and kcs.stdout is match(kc_private_re))
+        fail_msg: "kubeconfig server '{{ kcs.stdout }}' does not fit the mode (Phase A: private LAN IP; -e gpu_session=true: https://127.0.0.1:PORT via tunnel)"
     - name: Wait (about 20 min) for required Applications to exist and be Synced/Healthy/Succeeded
       ansible.builtin.shell: |
         kubectl get applications -A -o json | python3 -c '

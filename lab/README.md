@@ -331,7 +331,7 @@ Delete Applications (with resource finalizers) or simply destroy the VM.
 - **Workstations:** remove kubeconfig contexts and known_hosts entries.
 - **NVIDIA:** **revoke** the key(s). This is MANDATORY.
 - **Age key:** retire the lab key (keep the backup only if the history should stay decryptable).
-- **Phase B only:** tailnet device and auth key.
+- **Phase B:** a standalone rented cluster; its teardown is lab/gpu/README.md sections 5-8 (no tailnet).
 
 Proxmox detail (OWNER, hv-01):
 1. `ssh hv-01 'qm stop 101; qm destroy 101 --purge'`

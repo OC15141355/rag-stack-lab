@@ -34,7 +34,7 @@ jobs:
       - name: smoke.py copy drift
         run: scripts/sync-smoke.sh && git diff --exit-code lab/envs/base/smoke.py
       - name: unit tests
-        run: uv run --with pytest --with pyyaml --with jsonschema pytest -q
+        run: uv run --with pytest --with pyyaml --with jsonschema --with ansible-core pytest -q
       - name: argocd CLI v3.6.2 (checksum-verified)
         run: |
           curl -sSLo /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/v3.6.2/argocd-linux-amd64

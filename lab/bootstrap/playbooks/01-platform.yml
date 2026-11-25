@@ -1,32 +1,86 @@
 # FRESH INSTALL ONLY: no upgrade handling. The k3s install is skipped when
 # /etc/systemd/system/k3s.service exists; bumping k3s_version needs a manual upgrade.
+# Mode: Phase A by default; -e gpu_session=true selects ../vars/gpu-session.yml (rented GPU VM).
 - hosts: localhost
   connection: local
   gather_facts: false
+  vars:
+    rfc1918_re: '^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$'
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
   tasks:
     - name: Inventory group raglab must not be empty
       ansible.builtin.assert:
         that: groups['raglab'] | default([]) | length > 0
         fail_msg: "inventory.ini has no hosts in [raglab] (copy inventory.example.ini)"
+    - name: "Pre-flight: Phase A targets a private (RFC1918) address only, GPU mode only a non-private one"
+      ansible.builtin.assert:
+        that: >-
+          (hostvars[item].ansible_host | default('') | string is match(rfc1918_re)) == (not (gpu_host_prep | bool))
+        fail_msg: >-
+          mode/host mismatch for {{ item }}: Phase A (no gpu_session) needs a private LAN address,
+          -e gpu_session=true needs the rented VM's public address (wrong inventory or missing -e?)
+      loop: "{{ groups['raglab'] }}"
 
 - hosts: raglab
   become: true
   vars:
     k3s_version: v1.37.2+k3s1
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
   tasks:
+    - name: "Pre-flight: Phase A host has no NVIDIA driver (a GPU host means the wrong inventory or a missing -e gpu_session=true)"
+      ansible.builtin.shell: if command -v nvidia-smi >/dev/null 2>&1; then echo present; else echo absent; fi
+      register: smi_pre
+      changed_when: false
+      failed_when: smi_pre.stdout != 'absent'
+      when: not (gpu_host_prep | bool)
     - name: Wait for first-boot cloud-init (sshd answers before it finishes; k3s install races it otherwise)
       ansible.builtin.command: cloud-init status --wait
       changed_when: false
+      when: not (gpu_host_prep | bool)
+    - name: "GPU: wait for cloud-init if the image has it (exit 2 = finished with recoverable errors)"
+      ansible.builtin.shell: |
+        command -v cloud-init >/dev/null 2>&1 || exit 0
+        cloud-init status --wait >/dev/null; rc=$?; [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]
+      changed_when: false
+      when: gpu_host_prep | bool
+    - name: "GPU: gate - the driver works and the GPU is an A100 (spec D6: nvidia-smi passes first)"
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+      register: smi
+      changed_when: false
+      failed_when: smi.rc != 0 or 'A100' not in smi.stdout
+      when: gpu_host_prep | bool
+    - name: "GPU: stop the image's own Docker/containerd so k3s's containerd is the only runtime (NRI)"
+      ansible.builtin.shell: |
+        for u in docker.socket docker.service containerd.service; do
+          if systemctl list-unit-files "$u" --no-legend 2>/dev/null | grep -q "^$u"; then
+            systemctl disable --now "$u"; echo "stopped $u"
+          fi
+        done
+      register: hostrt
+      changed_when: "'stopped' in hostrt.stdout"
+      when: gpu_host_prep | bool
+    - name: "GPU: stop and disable JupyterLab if the image ships it (an extra listener on a rented, public host)"
+      ansible.builtin.shell: |
+        for u in $(systemctl list-unit-files --no-legend 2>/dev/null | awk '/jupyter/{print $1}'); do
+          systemctl disable --now "$u" && echo "stopped $u"
+        done
+      register: jupyter
+      changed_when: "'stopped' in jupyter.stdout"
+      when: gpu_host_prep | bool
     - name: Install and enable qemu-guest-agent (the cloud image lacks it; needed for qm shutdown with agent=1)
       ansible.builtin.apt:
         name: qemu-guest-agent
         state: present
         update_cache: true
+      when: install_guest_agent | bool
     - name: Ensure qemu-guest-agent is running
       ansible.builtin.systemd:
         name: qemu-guest-agent
         state: started
         enabled: true
+      when: install_guest_agent | bool
     - name: Download k3s binary at the pinned version (checksum-verified)
       ansible.builtin.get_url:
         url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/k3s"
@@ -45,7 +99,7 @@
         creates: /etc/systemd/system/k3s.service
       environment:
         INSTALL_K3S_SKIP_DOWNLOAD: "true"
-        INSTALL_K3S_EXEC: "server --secrets-encryption --write-kubeconfig-mode 0600"
+        INSTALL_K3S_EXEC: "{{ k3s_exec }}"
     - name: Verify secrets encryption is on (retry while the API server starts)
       ansible.builtin.command: k3s secrets-encrypt status
       register: enc
@@ -58,7 +112,7 @@
       become: false
       delegate_to: localhost
       ansible.builtin.file:
-        path: "{{ playbook_dir }}/../kubeconfig"
+        path: "{{ playbook_dir }}/../{{ kubeconfig_name }}"
         state: touch
         mode: "0600"
         modification_time: preserve
@@ -66,7 +120,7 @@
     - name: Fetch kubeconfig to the workstation (gitignored path)
       ansible.builtin.fetch:
         src: /etc/rancher/k3s/k3s.yaml
-        dest: "{{ playbook_dir }}/../kubeconfig"
+        dest: "{{ playbook_dir }}/../{{ kubeconfig_name }}"
         flat: true
 
 - hosts: localhost
@@ -74,10 +128,13 @@
   gather_facts: false
   vars:
     vm_ip: "{{ hostvars['raglab-vm'].ansible_host }}"
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
   tasks:
     - name: Point the kubeconfig at the VM instead of 127.0.0.1
       ansible.builtin.replace:
-        path: "{{ playbook_dir }}/../kubeconfig"
+        path: "{{ playbook_dir }}/../{{ kubeconfig_name }}"
         regexp: '127\.0\.0\.1'
         replace: "{{ vm_ip }}"
         mode: "0600"
+      when: rewrite_kubeconfig_server | bool
