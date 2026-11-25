@@ -16,6 +16,9 @@ providers:
     timeout_seconds: 300
     key_name: nim-local
     key_env: NIM_LOCAL_API_KEY
+    # Bifrost v2.6 blocks RFC1918 upstreams (SSRF guard) unless the provider opts in; the NIM Service is on
+    # the pod/service network. Found live 2026-11-26: HTTP 502 'connection to private IP ... is not allowed'.
+    allow_private_network: true
 models:
   - alias: chat/glm
     upstream: z-ai/glm-5.3-flash

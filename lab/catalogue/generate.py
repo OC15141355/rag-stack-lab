@@ -71,6 +71,7 @@ def provider_block(cat: dict, env: str, prov: str, aliases: dict[str, str]) -> d
             "base_url": p["base_url"],
             "default_request_timeout_in_seconds": p["timeout_seconds"],
             "stream_idle_timeout_in_seconds": p["timeout_seconds"],
+            **({"allow_private_network": True} if p.get("allow_private_network") else {}),
         },
         "custom_provider_config": {
             "base_provider_type": "openai",

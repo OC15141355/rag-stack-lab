@@ -239,3 +239,15 @@ def test_bad_serving_rejected(tmp_path, mutate, msg):
 def test_missing_catalogue_keys_are_clean_errors(tmp_path, mutate):
     r = gen(tmp_path / "o", "--catalogue", str(write_cat(tmp_path, mutate)))
     assert r.returncode == 2 and "CATALOGUE ERROR" in r.stderr and "Traceback" not in r.stderr, r.stderr
+
+
+def test_only_nim_local_may_reach_private_networks(tmp_path):
+    o = tmp_path / "o"
+    gen_ok(o)
+    c = cfg(o, "dev-gpu")
+    jsonschema.validate(c, SCHEMA)
+    for name, p in c["providers"].items():
+        assert p["network_config"].get("allow_private_network", False) is (name == "nim-local")
+    for env in ("dev", "qa", "prod"):
+        for p in cfg(o, env)["providers"].values():
+            assert "allow_private_network" not in p["network_config"]
