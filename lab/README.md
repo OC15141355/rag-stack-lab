@@ -10,9 +10,8 @@ export SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key.txt
 The VM's LAN IP lives only in the gitignored `lab/bootstrap/inventory.ini`. Do not write it into any committed file or PR.
 Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-namespace argocd --plaintext` (see 1.3).
 
-> Status of this runbook: the Proxmox VM steps (section 2) were reconstructed from the run notes in
-> `docs/raglab-phase-a-findings.md`, not replayed. The rebuild test (Task 11 Step 8) is still owed; fix any
-> missing step by PR.
+> Status of this runbook: rebuild-tested on 2026-11-25 (VM destroyed and rebuilt from this file alone, about 16 min;
+> the 9 defects found are fixed here). Fix any further missing step by PR.
 
 ## 1. Session start / stop
 
@@ -27,7 +26,7 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    ssh hv-01 'qm start 101'
    until kubectl get nodes 2>/dev/null | grep -q ' Ready'; do sleep 10; done
    ```
-3. Log in to Argo CD (admin password is read into a shell variable, never printed):
+3. Log in to Argo CD (needs the lab `KUBECONFIG` exported at the top of this file; admin password is read into a shell variable, never printed):
    ```bash
    export ARGOCD_OPTS="--config $HOME/.config/argocd-raglab --port-forward --port-forward-namespace argocd --plaintext"
    PW=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
@@ -36,7 +35,8 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    Caveat: `--password` puts the password on this process's argv for the length of the command (visible to `ps` for any
    local user on the workstation). Acceptable on a single-user workstation; otherwise run `argocd login` without
    `--password` and type it at the prompt.
-4. Check, hard refresh and sync each env app (smoke is a PostSync hook and only runs on sync). If an auto-sync is
+4. Check, hard refresh and sync each env app (smoke is a PostSync hook and only runs on sync; needs 1.3 done and
+   `ARGOCD_OPTS` exported in this shell; the dev hook can take ~3 min, so `argocd app sync` may look hung). If an auto-sync is
    already running (a commit just landed), wait for it before syncing manually (`argocd app wait`), or the two
    operations collide:
    ```bash
@@ -48,6 +48,8 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    done
    for e in dev qa prod; do kubectl -n raglab-$e logs job/smoke | tail -20; done
    ```
+   If `limit-429` fails with codes like `[200,200,200]` ("no 429 after request 2"), the probe key's 1-minute window rolled
+   over mid-burst. Re-sync that env once before investigating.
 5. Custom NIM health (kubectl does not show it; it lives in Argo's resource tree):
    ```bash
    for e in dev qa prod; do argocd app get raglab-apps/raglab-nim-$e -o json | python3 -c '
@@ -67,6 +69,18 @@ Argo CD's UI/API is reached with `argocd ... --port-forward --port-forward-names
    ```
 7. Handover probe (no Secret may carry `last-applied-configuration`): re-run the check in
    `lab/bootstrap/playbooks/03-handover.yml` with `cd lab/bootstrap && ansible-playbook playbooks/03-handover.yml`.
+8. Rate-limit read-back for all three envs (is the live value what the catalogue says? details in 4.1):
+   ```bash
+   for E in dev qa prod; do
+     kubectl -n raglab-$E port-forward svc/bifrost 18080:80 >/dev/null 2>&1 & PF=$!; sleep 3
+     BF_USER=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROST_ADMIN_USER}' | base64 -d)
+     BF_PASS=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROST_ADMIN_PASSWORD}' | base64 -d)
+     printf 'user = "%s:%s"\n' "$BF_USER" "$BF_PASS" | curl -s --config - http://127.0.0.1:18080/api/governance/rate-limits \
+       | python3 -c 'import json,sys;[print(r["id"],r.get("request_max_limit")) for r in json.load(sys.stdin)["rate_limits"]]'
+     unset BF_USER BF_PASS; kill $PF
+   done
+   ```
+   Expect `rl-<env>` = the catalogue value (28) and `rl-<env>-probe` = 2.
 
 ### Stop rule
 Stop the lab VM immediately if, during a session, any of these hold: host IO PSI `some avg60` > 10, k8s-ctrl CPU steal
@@ -76,7 +90,9 @@ ssh hv-01 'cat /proc/pressure/io /proc/pressure/memory'     # check every ~15 mi
 ```
 
 ### Stop
-1. `ssh hv-01 'qm shutdown 101'` (the VM is `onboot: 0`; it stays off until you start it).
+1. `ssh hv-01 'qm shutdown 101 --timeout 90 || qm stop 101'` (the VM is `onboot: 0`; it stays off until you start it).
+   The fallback covers a missing guest agent: with `agent: 1` and no qemu-guest-agent, `qm shutdown` fails after ~45 s
+   with "VM quit/powerdown failed" and the VM keeps running.
 
 ## 2. Bootstrap from scratch
 
@@ -95,27 +111,37 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    pvesm add dir raglab --path /mnt/raglab --is_mountpoint yes --content images,iso --nodes hv-01
    pvesm status | grep raglab'
    ```
-3. Download the Ubuntu 24.04 cloud image and VERIFY its checksum against Canonical's `SHA256SUMS` before use
-   (the original build used a verified image; fetch both from cloud-images.ubuntu.com, `sha256sum -c`).
+3. Download the Ubuntu 24.04 cloud image and VERIFY its checksum against Canonical's `SHA256SUMS` before use. Keep the
+   image off `/mnt/raglab` (14G). `sha256sum -c` must print `noble-server-cloudimg-amd64.img: OK`:
+   ```bash
+   ssh hv-01 'mkdir -p /root/raglab-img && cd /root/raglab-img &&
+     curl -fsSLO https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img &&
+     curl -fsSLO https://cloud-images.ubuntu.com/noble/current/SHA256SUMS &&
+     sha256sum -c SHA256SUMS --ignore-missing'
+   scp -O ~/.ssh/id_ed25519.pub hv-01:/root/raglab-img/pubkey    # --sshkeys needs the file on hv-01
+   ```
 4. Create the VM (2 vCPU, 5 GiB, no ballooning, low CPU weight, IO caps, not started on boot), import the image
    to `raglab` storage, size the disk to 13G, add a cloud-init drive on the same storage, set `ciuser=ubuntu`, your
    SSH public key, and `ipconfig0 ip=dhcp`:
    ```bash
    ssh hv-01 'set -e
    qm create 101 --name raglab --cores 2 --memory 5120 --balloon 0 --cpuunits 50 --onboot 0 \
-     --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-pci --ostype l26
-   qm importdisk 101 /path/to/noble-server-cloudimg-amd64.img raglab --format raw
+     --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-pci --ostype l26 --agent 1
+   qm importdisk 101 /root/raglab-img/noble-server-cloudimg-amd64.img raglab --format raw
    qm set 101 --scsi0 raglab:101/vm-101-disk-0.raw,mbps_wr=50,iops_wr=500 --boot order=scsi0
    qm resize 101 scsi0 13G
-   qm set 101 --ide2 raglab:cloudinit --ciuser ubuntu --sshkeys /path/to/pubkey --ipconfig0 ip=dhcp
+   qm set 101 --ide2 raglab:cloudinit --ciuser ubuntu --sshkeys /root/raglab-img/pubkey --ipconfig0 ip=dhcp
    qm config 101 | grep -E "^(cores|memory|cpuunits|onboot|scsi0|balloon)"'
    ```
-   Adjust the bridge name and image/key paths to hv-01. Expect `cores: 2`, `memory: 5120`, `cpuunits: 50`,
-   `onboot: 0`, disk on `raglab:` with `mbps_wr=50,iops_wr=500`.
-   Do NOT add the VM to any vzdump backup job. Do NOT snapshot it. The cloud image has no qemu-guest-agent.
-5. Start it and find its address from your DHCP server's lease table (no guest agent):
+   Adjust the bridge name to hv-01. Expect `cores: 2`, `memory: 5120`, `cpuunits: 50`, `agent: 1`, disk on `raglab:`
+   with `mbps_wr=50,iops_wr=500`; `onboot` absent means 0 (the default is not printed).
+   Do NOT add the VM to any vzdump backup job. Do NOT snapshot it. The cloud image has no qemu-guest-agent; with
+   `--agent 1` the bootstrap (2.3 step 1) installs it. Until then `qm shutdown` fails (see Stop).
+5. Start it and find its address (the guest agent is not running yet, so use the MAC; adjust the subnet):
    ```bash
-   ssh hv-01 'qm start 101'
+   ssh hv-01 'qm start 101; qm config 101 | grep net0'      # note the MAC
+   ssh hv-01 'for i in $(seq 1 254); do ping -c1 -W1 192.168.0.$i >/dev/null 2>&1 & done; wait; ip -4 neigh | grep -i <mac>'
+   ssh-keygen -R <ip>      # drop any stale host key from a previous build
    ```
    Make the lease stable (DHCP reservation) if you can.
 
@@ -129,7 +155,10 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    Tools needed on the workstation: `python3`, `uv`, `gh`, `age` / `age-keygen`, `sops`, `gitleaks`, `kubectl`, `helm`,
    `ansible`, and the `argocd` CLI.
 3. Inventory (gitignored): `cd lab/bootstrap && cp inventory.example.ini inventory.ini`, then replace
-   `<LAN IP of the lab VM>` with the VM's IP. Verify `ssh ubuntu@<ip>` works first (accept the host key).
+   `<LAN IP of the lab VM>` with the VM's IP. Verify `ssh ubuntu@<ip>` works first (accept the host key), then wait for
+   first-boot cloud-init: `ssh ubuntu@<ip> 'cloud-init status --wait'` must print `status: done`. (sshd answers before
+   cloud-init finishes; installing k3s too early fails with "D-Bus connection terminated". The playbook also waits, and
+   re-running 01 is safe.)
 
 ### 2.3 Run the playbooks (run directory: `lab/bootstrap`)
 `ansible.cfg` there points at `inventory.ini`, so always `cd lab/bootstrap` first.
@@ -138,7 +167,8 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    cd lab/bootstrap && ansible-playbook playbooks/01-platform.yml
    KUBECONFIG=$PWD/kubeconfig kubectl get nodes
    ```
-   Expect one node `Ready` and "Verify secrets encryption" `ok`.
+   Expect one node `Ready` and "Verify secrets encryption" `ok`. The playbook also installs and enables
+   `qemu-guest-agent` (so `qm shutdown` works once the VM is rebooted or the agent is started).
 2. Namespaces, CMP plugin, repo-server egress policy, age-key Secret (created on the workstation, never logged),
    Argo CD (chart 10.18.3 = v3.6.2), locked `default` project, AppProjects, `raglab-system`, root app:
    ```bash
@@ -152,7 +182,7 @@ Ubuntu 24.04 cloud image on dir storage backed by a dedicated ext4 LV.
    apps as not ready. Only then, and deliberately, allow them:
    `ansible-playbook playbooks/03-handover.yml -e '{"handover_allow_unhealthy":["raglab-apps/raglab-dev","raglab-apps/raglab-qa","raglab-apps/raglab-prod"]}'`
    (entries are `namespace/name`)
-4. Do a session start (1.4) to sync and read smoke.
+4. Do a session start (1.3 argocd login, then 1.4, with `ARGOCD_OPTS` exported) to sync and read smoke.
 
 ## 3. Adding the NVIDIA key (owner TODO)
 Every env secret currently holds `NVIDIA_API_KEY=PENDING-...`. Use a Personal key scoped to the API catalog only, with the
@@ -195,21 +225,19 @@ together because it is the same commit.
    **"Create a merge commit"** (never squash, never rebase: a squash gives `env/qa` a new SHA, so the promoted SHA no
    longer matches the smoke evidence and the next promotion diverges). Sync qa.
 4. Same again for `env/qa` -> `env/prod` using the QA smoke tail for the same SHA, again with "Create a merge commit".
-   **OWNER TODO:** set `strict: false` on the `env/*` branch protection (keep the required `gates` check). With
-   `strict: true`, the second promotion blocks as "out of date". An automated attempt to change this was refused by the
-   permission policy; it is an owner decision.
+   `env/*` branch protection has `strict: false` (keep the required `gates` check); with `strict: true` the second
+   promotion blocks as "out of date".
 5. This gate is attested, not enforced. A failed prod smoke means: revert PR on `env/prod`, re-sync.
 6. "Healthy" in Argo is not evidence; only the smoke report with the matching `revision=` is.
-7. Known open question: whether a rate-limit change propagates to existing Bifrost limit rows (rows are runtime-owned).
-   Check with the read-back below after step 2.
+7. Rate-limit changes DO propagate to the running governance rows when `source_of_truth` is `config.json` (verified live
+   with the 30 -> 28 change). Still confirm with the read-back below after step 2.
 
 ### 4.1 Config read-back (is the live value what the catalogue says?)
-Bifrost v2.6.0 management API, verified in source (`transports/bifrost-http/handlers/governance.go` at ref
-`transports/v2.6.0`): `GET /api/governance/virtual-keys` (response `.virtual_keys[]`, each with `.rate_limit`),
-`GET /api/governance/virtual-keys/{vk_id}`, `GET /api/governance/rate-limits` (response `.rate_limits[]`,
-field `request_max_limit`). Management routes accept admin basic auth per the auth middleware. UNVERIFIED live: the
-paths and JSON shape are read from source; the commands below have not been run against the lab (it was off). If a
-call 404s, use the UI (Governance -> Virtual Keys / Rate Limits) instead.
+Bifrost v2.6.0 management API (source: `transports/bifrost-http/handlers/governance.go` at ref `transports/v2.6.0`):
+`GET /api/governance/rate-limits` (response `.rate_limits[]`, field `request_max_limit`) is VERIFIED live with admin
+basic auth. `GET /api/governance/virtual-keys` returns `.virtual_keys[]`, each with `.rate_limit`;
+`GET /api/governance/virtual-keys/{vk_id}` wraps its result in `{"virtual_key": {...}}`. If a call 404s, use the UI
+(Governance -> Virtual Keys / Rate Limits) instead.
 ```bash
 E=dev   # or qa / prod
 kubectl -n raglab-$E port-forward svc/bifrost 18080:80 >/dev/null 2>&1 & PF=$!; sleep 3
@@ -217,7 +245,7 @@ BF_USER=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROS
 BF_PASS=$(kubectl -n raglab-$E get secret bifrost-env -o jsonpath='{.data.BIFROST_ADMIN_PASSWORD}' | base64 -d)
 # curl reads the credential from stdin (--config -), so it never appears on argv or in output
 printf 'user = "%s:%s"\n' "$BF_USER" "$BF_PASS" | curl -s --config - http://127.0.0.1:18080/api/governance/virtual-keys/vk-$E \
-  | python3 -c 'import json,sys;v=json.load(sys.stdin);print(v.get("id"),v.get("rate_limit",{}).get("request_max_limit"))'
+  | python3 -c 'import json,sys;v=json.load(sys.stdin)["virtual_key"];print(v.get("id"),(v.get("rate_limit") or {}).get("request_max_limit"))'
 printf 'user = "%s:%s"\n' "$BF_USER" "$BF_PASS" | curl -s --config - http://127.0.0.1:18080/api/governance/rate-limits \
   | python3 -c 'import json,sys;[print(r["id"],r.get("request_max_limit")) for r in json.load(sys.stdin)["rate_limits"]]'
 unset BF_USER BF_PASS; kill $PF
@@ -336,4 +364,10 @@ Proxmox detail (OWNER, hv-01):
   --plaintext` (the server serves plain HTTP behind the port-forward); `--core` fails here.
 - **Env apps fail first sync (CRDs missing):** they use `SkipDryRunOnMissingResource` and retry; wait for `raglab-system`.
 - **VM won't start after reboot of hv-01:** the fstab line is `nofail`; check `mount | grep raglab` and `pvesm status`.
+- **`qm shutdown 101` fails ("VM quit/powerdown failed") after ~45 s:** `agent: 1` is set but qemu-guest-agent is not
+  running in the guest. Use `qm shutdown 101 --timeout 90 || qm stop 101`; the bootstrap installs the agent.
+- **`01-platform.yml` fails at "Install k3s server" with "D-Bus connection terminated":** first-boot cloud-init was still
+  running. `ssh ubuntu@<ip> 'cloud-init status --wait'`, then re-run (safe).
+- **`scp` to hv-01 fails with a protocol error from macOS:** use `scp -O`.
+- **`install-hooks.sh` leaves an untracked `.githooks/`:** expected on a fresh clone (hooks path config is local).
 - **`ansible-playbook` cannot find the inventory:** run from `lab/bootstrap` (relative `inventory.ini`).

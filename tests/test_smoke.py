@@ -40,7 +40,7 @@ def run(url, tmp_path, *extra, env_extra=None, tools=True, raw=None, revision="a
     return subprocess.run([sys.executable, str(SMOKE), "--base-url", url, "--models-file", models_file(tmp_path, tools, raw),
                            "--header-env", "x-bf-vk=BIFROST_VK", *extra], capture_output=True, text=True, env=env)
 
-LIM = ("--limit-burst", "3", "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit")
+LIM = ("--limit-burst", "4", "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit")
 
 def test_good_passes_and_key_not_in_argv(mock, tmp_path):
     r = run(mock(), tmp_path, "--expect-auth", "virtual key")
@@ -130,7 +130,7 @@ def test_negative_requests_carry_no_credentials(mock, tmp_path):
     unauth = [q for q in reqs if "x-bf-vk" not in q]
     probe = [q for q in reqs if q.get("x-bf-vk") == VK_PROBE]
     assert unauth and all("authorization" not in q for q in unauth)
-    assert len(probe) == 3 and all("authorization" not in q for q in probe)
+    assert len(probe) == 4 and all("authorization" not in q for q in probe)
     assert any(q.get("authorization") for q in reqs if q.get("x-bf-vk") == VK)
 
 def test_expect_auth_empty_rejected(mock, tmp_path):
