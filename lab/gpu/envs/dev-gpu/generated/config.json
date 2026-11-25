@@ -46,7 +46,7 @@
             "key_ids": [
               "*"
             ],
-            "provider": "nvidia-hosted",
+            "provider": "nim-local",
             "weight": 1
           }
         ],
@@ -65,7 +65,7 @@
             "key_ids": [
               "*"
             ],
-            "provider": "nvidia-hosted",
+            "provider": "nim-local",
             "weight": 1
           }
         ],
@@ -82,7 +82,7 @@
     "type": "sqlite"
   },
   "providers": {
-    "nvidia-hosted": {
+    "nim-local": {
       "custom_provider_config": {
         "allowed_requests": {
           "chat_completion": true,
@@ -94,18 +94,19 @@
       "keys": [
         {
           "aliases": {
-            "chat/small": "z-ai/glm-5.3-flash"
+            "chat/small": "meta/llama-3.1-8b-instruct"
           },
           "models": [
             "chat/small"
           ],
-          "name": "nvidia-dev-gpu",
-          "value": "env.NVIDIA_API_KEY",
+          "name": "nim-local-dev-gpu",
+          "value": "env.NIM_LOCAL_API_KEY",
           "weight": 1
         }
       ],
       "network_config": {
-        "base_url": "https://integrate.api.nvidia.com",
+        "allow_private_network": true,
+        "base_url": "http://llama-8b.raglab-gpu.svc.cluster.local:8000",
         "default_request_timeout_in_seconds": 300,
         "stream_idle_timeout_in_seconds": 300
       },

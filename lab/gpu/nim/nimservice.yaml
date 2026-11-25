@@ -25,7 +25,7 @@ spec:
     requests: {cpu: "4", memory: 24Gi, nvidia.com/gpu: 1}
     limits: {memory: 24Gi, nvidia.com/gpu: 1}
   # runtimeClassName: intentionally unset (NRI path: no 'nvidia' RuntimeClass)
-  replicas: 0
+  replicas: 1
   userID: 1000
   groupID: 2000
   startupProbe:
