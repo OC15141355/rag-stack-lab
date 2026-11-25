@@ -33,7 +33,7 @@ models:
   - alias: chat/small
     # Hosted stand-in: meta/llama-3.1-8b-instruct was retired from the hosted API (HTTP 410, 2026-11-26).
     # The cutover PR (session/gpu-cutover) sets this to meta/llama-3.1-8b-instruct on nim-local; not like-for-like.
-    upstream: z-ai/glm-5.3-flash
+    upstream: meta/llama-3.1-8b-instruct   # cutover: served by the local NIM (hosted baseline was a stand-in)
     context_window: 131072
     max_output_tokens: 4096
     capabilities: [chat, stream, tools]
@@ -48,7 +48,7 @@ environments:
   # Phase B: exists only on the rented GPU cluster (lab/gpu). Cutover = change chat/small's provider.
   dev-gpu:
     dir: gpu/envs/dev-gpu
-    serving: {chat/small: nvidia-hosted}
+    serving: {chat/small: nim-local}
     requests_per_minute: 28
     tokens_per_minute: 60000
     probe_requests_per_minute: 2
