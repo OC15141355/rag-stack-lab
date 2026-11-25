@@ -8,10 +8,10 @@
         "tools"
       ],
       "context_window": 131072,
-      "id": "nim-local/chat/small",
+      "id": "nvidia-hosted/chat/small",
       "max_output_tokens": 4096,
-      "provider": "nim-local",
-      "upstream": "meta/llama-3.1-8b-instruct"
+      "provider": "nvidia-hosted",
+      "upstream": "z-ai/glm-5.3-flash"
     }
   ]
 }
