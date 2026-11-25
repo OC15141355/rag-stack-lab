@@ -40,6 +40,7 @@ Status: **Phase A COMPLETE; all acceptance criteria pass live.** The ledger is `
 - **Every commit to a tracked branch rolls Bifrost and reruns smoke**: the revision annotation reaches the pod template. That costs NVIDIA calls and can trip the probe key within 60 s.
 - **App-of-apps on `main` = control of everything it defines.** Whoever merges to `main` controls the qa/prod app definitions and every env Secret.
 - **Squash vs merge on protected promotion branches:** promote with "Create a merge commit"; a squash rewrites the SHA the evidence refers to.
+- **Don't rely on GitHub push protection for NVIDIA/NGC keys.** A live probe (2026-11-25) pushed a fake `nvapi-` key and it was accepted with no alert. Use gitleaks with a custom `nvapi-` rule in both pre-commit and CI.
 - **`envFrom` Secret changes don't roll pods.** After a Secret change, `rollout restart` Bifrost.
 
 ## Verified live (2026-11-25, dev smoke at 8b7c3c8)
@@ -80,7 +81,7 @@ Nothing outstanding: rate-limit propagation is verified (criterion 3), and the l
 | 4 | NIMService "scaled to zero" Healthy | PASS | Argo resource health for glm and nemotron in raglab-nim-dev/qa/prod: `Healthy`, message `scaled to zero (Phase A)` (via `argocd app get -o json`; kubectl shows `NotReady`). |
 | 4 | Prune protection | PASS | PR #17 removed canary + PVC: canary pruned, PVC Bound; reverted by #18. |
 | 5 | Host impact | PASS | Controlled windows, lab ON (busy) vs lab OFF (confirmed stopped): both etcd WAL fsync p50 <= 2 ms, p99 <= 16 ms, 0 leader changes; etcd healthy. Earlier: hv-01 PSI io/mem ~0, 0 OOM/evict. |
-| 6 | Gates | PARTIAL | GitHub push protection: `secret_scanning_push_protection: enabled`, `secret_scanning: enabled` (`gh api repos/OC15141355/rag-stack-lab`); validity checks not enabled. No fake key pushed; the `--no-verify` push test was deliberately not attempted. Hook/CI/structural coverage is by the test suite (PR #1). |
+| 6 | Gates | PASS with caveats | The local pre-commit hook and CI gitleaks block `nvapi-` keys (tested in Task 1). GitHub secret scanning and push protection are enabled, BUT a live probe on 2026-11-25 showed push protection does NOT recognise NVIDIA `nvapi-` keys: a fake-key push was accepted and no alert was raised (branch deleted afterwards). GitHub `secret_scanning_validity_checks` cannot be enabled on this repo (the API accepts the request but it stays disabled; likely needs Advanced Security). |
 | 7 | Runbook | PASS | Rebuilt from `lab/README.md` alone in ~16 min; 9 runbook defects (D1-D9) found and fixed in this PR. |
 
 ### Task 11 negative probes (temporary Applications in `raglab-apps`, all deleted afterwards)

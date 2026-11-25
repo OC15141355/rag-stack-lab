@@ -16,6 +16,10 @@
 **Recommendation: Option 1.** It answers the tickets' intent (registered, listed, versioned models; metadata and
 limits; gated promotion) with components NVIDIA still supports, plus the automation the platform needs anyway.
 
+> **[MACRO: Info panel]** Verified in lab (2026-11-25): the recommended Option 1 was prototyped end to end in a lab
+> (operator CRs via Argo CD, Bifrost, catalogue, promotion and smoke gates); see `docs/raglab-phase-a-findings.md`.
+> Effort estimates are unchanged. The lab build took about 2 days of agent-assisted work, which supports the phase sizes.
+
 **What would change it:** NVIDIA confirms a supported, near-term path for the NeMo layer; Helix goes GA with a
 migration guide; a fine-tuning/evaluation workflow is approved (then trial Helix).
 
