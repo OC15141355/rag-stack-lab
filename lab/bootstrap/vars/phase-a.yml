@@ -1,0 +1,21 @@
+# Phase A (home lab VM): the values the playbooks had before Phase B. Selected when gpu_session is unset/false.
+# tests/test_playbooks.py pins every value; changing one changes Phase A.
+kubeconfig_name: kubeconfig
+rewrite_kubeconfig_server: true
+install_guest_agent: true
+gpu_host_prep: false
+k3s_exec: server --secrets-encryption --write-kubeconfig-mode 0600
+hand_applied_dir: argocd/hand-applied
+age_key_relpath: .sops/raglab-age-key.txt
+app_projects: [appproject-raglab.yaml, appproject-raglab-platform.yaml]
+platform_apps: [raglab-system.yaml]
+required_apps:
+  - argocd/raglab-root
+  - argocd/raglab-system
+  - raglab-apps/raglab-secrets
+  - raglab-apps/raglab-dev
+  - raglab-apps/raglab-qa
+  - raglab-apps/raglab-prod
+  - raglab-apps/raglab-nim-dev
+  - raglab-apps/raglab-nim-qa
+  - raglab-apps/raglab-nim-prod

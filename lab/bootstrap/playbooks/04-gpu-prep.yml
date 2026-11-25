@@ -1,0 +1,66 @@
+# Phase B only (run after 01 with -e gpu_session=true). Records what the rented VM provides and gates the
+# NRI path (spec D6). Writes ~/.raglab-gpu/evidence/gpu-prep.txt on the workstation (outside the repo).
+- hosts: raglab
+  become: true
+  gather_facts: false
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
+  tasks:
+    - name: Refuse to run outside GPU-session mode
+      ansible.builtin.assert:
+        that: gpu_host_prep | bool
+        fail_msg: "04-gpu-prep.yml is for the rented GPU VM only (-e gpu_session=true)"
+    - name: GPU, driver, memory
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+      register: smi
+      changed_when: false
+      failed_when: smi.rc != 0 or 'A100' not in smi.stdout
+    - name: k3s containerd version
+      ansible.builtin.shell: k3s ctr version | awk '/^Server:/{s=1} s && /Version:/{print $2; exit}'
+      register: ctrv
+      changed_when: false
+      failed_when: ctrv.rc != 0 or ctrv.stdout == ''
+    - name: Gate - containerd supports the NRI plugin path (1.7.30+ on 1.7, or 2.1+)
+      ansible.builtin.assert:
+        that: >-
+          (ctrv.stdout | regex_replace('^v', '') | regex_replace('[-+].*$', '')) is version('2.1.0', '>=') or
+          ((ctrv.stdout | regex_replace('^v', '') | regex_replace('[-+].*$', '')) is version('1.7.30', '>=') and
+           (ctrv.stdout | regex_replace('^v', '') | regex_replace('[-+].*$', '')) is version('1.8.0', '<'))
+        fail_msg: "containerd {{ ctrv.stdout }} cannot use the NRI path: use the fallback in lab/gpu/README.md"
+    - name: NRI socket present (k3s's containerd has NRI enabled)
+      ansible.builtin.stat: {path: /var/run/nri/nri.sock}
+      register: nri
+    - name: Host NVIDIA container toolkit (recorded, not required)
+      ansible.builtin.shell: command -v nvidia-ctk >/dev/null && nvidia-ctk --version | head -1 || echo absent
+      register: ctk
+      changed_when: false
+    - name: Host Docker/containerd services (recorded; 01 stops them in GPU mode)
+      ansible.builtin.shell: for u in docker containerd; do printf '%s=%s ' "$u" "$(systemctl is-active $u 2>/dev/null)"; done
+      register: hostrt
+      changed_when: false
+    - name: Free disk for images, weights and the NIMCache PVC
+      ansible.builtin.shell: df -BG --output=avail /var/lib/rancher | tail -1 | tr -dc 0-9
+      register: disk
+      changed_when: false
+      failed_when: disk.stdout | int < 120
+    - name: Evidence directory on the workstation (outside the repo)
+      become: false
+      delegate_to: localhost
+      ansible.builtin.file: {path: "{{ lookup('env', 'HOME') }}/.raglab-gpu/evidence", state: directory, mode: "0700"}
+    - name: Record evidence on the workstation (outside the repo)
+      become: false
+      delegate_to: localhost
+      ansible.builtin.copy:
+        dest: "{{ lookup('env', 'HOME') }}/.raglab-gpu/evidence/gpu-prep.txt"
+        mode: "0600"
+        content: |
+          gpu: {{ smi.stdout }}
+          containerd: {{ ctrv.stdout }}
+          nri_socket: {{ nri.stat.exists }}
+          host_toolkit: {{ ctk.stdout }}
+          host_runtimes: {{ hostrt.stdout }}
+          disk_free_gb: {{ disk.stdout }}
+    - name: Gate - NRI socket must exist for cdi.nriPluginEnabled=true
+      ansible.builtin.assert:
+        that: nri.stat.exists
+        fail_msg: "no /var/run/nri/nri.sock: k3s's containerd has NRI disabled; use the fallback in lab/gpu/README.md"
