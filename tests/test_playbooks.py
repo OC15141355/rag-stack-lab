@@ -173,8 +173,11 @@ def inv(tmp_path, host):
 
 def preflight(tmp_path, host, mode):
     env, _ = fake_env(tmp_path, [])
+    boot = tmp_path / "boot"    # a copy: play 3 of 01 edits the kubeconfig, which must never be the real one
+    shutil.copytree(BOOT, boot, ignore=shutil.ignore_patterns("kubeconfig*", "inventory.ini"))
+    for n in ("kubeconfig", "kubeconfig.gpu"): (boot / n).write_text("server: https://127.0.0.1:6443\n")
     return subprocess.run(["ansible-playbook", "-i", str(inv(tmp_path, host)), "-l", "localhost", "-e", f"gpu_session={mode}",
-                           "playbooks/01-platform.yml"], cwd=BOOT, env=env, capture_output=True, text=True)
+                           "playbooks/01-platform.yml"], cwd=boot, env=env, capture_output=True, text=True)
 
 @needs_ansible
 @pytest.mark.parametrize("mode,host,ok", [("false", "192.168.0.50", True), ("false", "10.1.2.3", True), ("false", "172.20.1.1", True),
