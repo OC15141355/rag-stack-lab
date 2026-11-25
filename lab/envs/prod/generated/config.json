@@ -22,7 +22,7 @@
     "rate_limits": [
       {
         "id": "rl-prod",
-        "request_max_limit": 30,
+        "request_max_limit": 28,
         "request_reset_duration": "1m",
         "token_max_limit": 60000,
         "token_reset_duration": "1m"

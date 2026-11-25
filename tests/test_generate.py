@@ -79,7 +79,9 @@ def test_no_literal_secrets_only_env_refs(out):
 def test_limits_are_per_env_and_probe_key_exists(out):
     g = cfg(out, "dev")["governance"]
     rl = {r["id"]: r for r in g["rate_limits"]}
-    assert rl["rl-dev"]["request_max_limit"] == 30 and rl["rl-dev-probe"]["request_max_limit"] == 2
+    dev = CAT["environments"]["dev"]
+    assert rl["rl-dev"]["request_max_limit"] == dev["requests_per_minute"]
+    assert rl["rl-dev-probe"]["request_max_limit"] == dev["probe_requests_per_minute"] == 2
     assert rl["rl-dev"]["token_max_limit"] == 60000
     assert rl["rl-dev"]["request_reset_duration"] == "1m" and rl["rl-dev"]["token_reset_duration"] == "1m"
     assert rl["rl-dev-probe"]["request_reset_duration"] == "1m"
@@ -131,7 +133,10 @@ def test_models_json_content(out):
 def test_check_mode_detects_drift(out):
     gen_ok(out, "--check")
     p = out / "qa/generated/config.json"; orig = p.read_text()
-    p.write_text(orig.replace('"request_max_limit": 30', '"request_max_limit": 99'))
+    rpm = CAT["environments"]["qa"]["requests_per_minute"]
+    mutated = orig.replace(f'"request_max_limit": {rpm}', '"request_max_limit": 99999')
+    assert mutated != orig, "drift test must actually change the file"
+    p.write_text(mutated)
     r = gen(out, "--check")
     assert r.returncode == 1 and "DRIFT:" in r.stdout
     p.write_text(orig)
