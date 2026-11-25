@@ -192,7 +192,8 @@ def test_dev_gpu_hosted_baseline(tmp_path):
     assert set(c["providers"]) == {"nvidia-hosted"}
     key = c["providers"]["nvidia-hosted"]["keys"][0]
     assert key["name"] == "nvidia-dev-gpu" and key["value"] == "env.NVIDIA_API_KEY"
-    assert key["aliases"] == {"chat/small": "meta/llama-3.1-8b-instruct"}
+    small = next(m for m in CAT["models"] if m["alias"] == "chat/small")
+    assert key["aliases"] == {"chat/small": small["upstream"]}
     for vk in c["governance"]["virtual_keys"]:
         assert vk["provider_configs"] == [{"provider": "nvidia-hosted", "weight": 1,
                                            "allowed_models": ["chat/small"], "key_ids": ["*"]}]
