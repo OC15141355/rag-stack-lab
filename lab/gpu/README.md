@@ -53,7 +53,8 @@ IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/in
 8. Lambda: `python3 scripts/lambda.py instances` exits 0 (`live instances: 0  file systems: 0`) and
    `python3 scripts/lambda.py types` shows capacity for `gpu_1x_a100_sxm4` (us-east-1/us-west-2) or `gpu_1x_a100`
    (us-south-2). In the Lambda console: the account firewall allows TCP 22 and ICMP only from the current home
-   address (if the home address changed, fix the rule before renting), SSH key `raglab-gpu-session` is registered.
+   address (if the home address changed, fix the rule before renting), SSH key `raglab-gpu-session` is registered. The account's billing profile (address and payment method) is valid: a
+   bad billing address makes `launch` fail with `HTTP 403 global/invalid-address` (seen 2026-11-26).
 9. Home lab VM stopped: `ssh hv-01 'qm status 101'` prints `status: stopped`.
 10. Draft PR branches exist: `session/gpu-go` and `session/gpu-cutover` (built in plan Task 8).
 11. Calendar alarms set relative to the planned start: T+3:00 checkpoint, T+4:15 teardown, T+4:45, T+5:00.
