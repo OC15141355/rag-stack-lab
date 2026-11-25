@@ -24,6 +24,7 @@ cd ~/Projects/rag-stack-lab
 export RG=$HOME/.raglab-gpu SK=$HOME/.sops/raglab-gpu-session
 export KUBECONFIG=$PWD/lab/bootstrap/kubeconfig.gpu
 export ARGOCD_OPTS="--core"        # talks to the cluster via kubeconfig.gpu; no login, no password, no token on disk
+export ARGOCD_CONFIG=$RG/argocd-config   # isolate from any other Argo CLI config on this Mac (found live: home SSO context leaked in)
 gssh() { ssh -i "$HOME/.ssh/raglab_gpu_ed25519" -o IdentitiesOnly=yes -o ForwardAgent=no "$@"; }
 skey() { age -d -i "$SK/age-key.txt" "$SK/session-nvapi-key.age"; }      # pipe only: skey | <consumer>
 IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/inventory.ini" 2>/dev/null)
@@ -189,7 +190,7 @@ If `-l app.kubernetes.io/component=nim-llm` finds no pod, the operator did not c
 pod's real labels (`kubectl -n raglab-gpu get pods --show-labels`) and fix the two NetworkPolicies by PR (open item).
 Direct NIM check (port-forward bypasses NetworkPolicy; this tests the NIM, not the policy):
 ```bash
-kubectl -n raglab-gpu port-forward svc/llama-8b 18000:8000 >/dev/null 2>&1 & PF=$!; sleep 3
+kubectl -n raglab-gpu port-forward svc/llama-8b 18000:8000 >/dev/null 2>&1 & PF=$!; i=0; until nc -z 127.0.0.1 18000 2>/dev/null || [ $((i+=1)) -gt 30 ]; do sleep 1; done
 curl -s -o /dev/null -w 'ready %{http_code}\n' http://127.0.0.1:18000/v1/health/ready
 curl -s http://127.0.0.1:18000/v1/models | python3 -c 'import json,sys;print([m["id"] for m in json.load(sys.stdin)["data"]])'
 curl -s http://127.0.0.1:18000/v1/chat/completions -H 'Content-Type: application/json' \
@@ -231,7 +232,7 @@ kubectl -n raglab-dev-gpu logs job/smoke | tail -40 | tee $RG/evidence/smoke-nim
 Expect `nim-local/chat/small` chat, stream, tools PASS, `[PASS] auth-negative`, `[PASS] limit-429`, `0 failed`,
 `revision=<CUT>`. Then confirm Bifrost routed to the NIM:
 ```bash
-kubectl -n raglab-dev-gpu port-forward svc/bifrost 18080:80 >/dev/null 2>&1 & PF=$!; sleep 3
+kubectl -n raglab-dev-gpu port-forward svc/bifrost 18080:80 >/dev/null 2>&1 & PF=$!; i=0; until nc -z 127.0.0.1 18080 2>/dev/null || [ $((i+=1)) -gt 30 ]; do sleep 1; done
 VK=$(kubectl -n raglab-dev-gpu get secret bifrost-env -o jsonpath='{.data.BIFROST_VK}' | base64 -d)
 printf 'header = "x-bf-vk: %s"\n' "$VK" | curl -s --config - -H 'Content-Type: application/json' \
   -d '{"model":"nim-local/chat/small","messages":[{"role":"user","content":"Reply with OK."}],"max_tokens":8}' \
@@ -251,6 +252,11 @@ Expect the provider `nim-local`. If the tools check fails on the NIM only, recor
 item); do not change NIM flags under the clock unless more than 45 min remain before T+4:15.
 
 ### 3.9 Failure injection, rollback, roll forward (T+3:40)
+Two things found live (2026-11-26): (a) Argo keeps retrying a failed PostSync smoke on the OLD revision and does not
+start the new sync until that operation ends: terminate it first
+(`kubectl -n raglab-apps patch application raglab-dev-gpu --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'`),
+then sync the wanted revision. (b) `git revert <CUT>` can conflict in `lab/gpu/envs/dev-gpu/generated/*`: resolve by
+running `generate.py` (regenerate from the reverted catalogue) and `generate.py --check`, never by hand-merging JSON.
 1. Failure injection PR: `git fetch origin && git checkout -b session/gpu-fail origin/main && sed -i '' 's/^  replicas: 1$/  replicas: 0/' lab/gpu/nim/nimservice.yaml`,
    commit, push, PR, merge. Then:
    ```bash
@@ -308,7 +314,7 @@ Then go straight to section 5.
 ## 6. Key revocation and negative probes (same day, in this order)
 1. **Session nvapi key:** revoke it in the NVIDIA/NGC console (revoke, not just expire). Then both must print `REJECTED`
    and exit 1 (exit 2 = inconclusive: retry later, it proves nothing):
-   `skey | python3 scripts/key_probe.py hosted --chat meta/llama-3.1-8b-instruct; echo exit=$?` (without `--chat` the probe is INCONCLUSIVE by design: `/v1/models` answers without a key) and
+   `skey | python3 scripts/key_probe.py hosted --chat z-ai/glm-5.3-flash; echo exit=$?` (use a model that is live on the hosted API; llama-3.1-8b was retired, HTTP 410) (without `--chat` the probe is INCONCLUSIVE by design: `/v1/models` answers without a key) and
    `skey | python3 scripts/key_probe.py nvcr --repo nim/meta/llama-3.1-8b-instruct --tag 2.1.7; echo exit=$?`
 2. **Lambda API key:** delete the session key in the Lambda console, then
    `python3 scripts/lambda.py instances; echo exit=$?` must fail with `HTTP 401` (exit 3).

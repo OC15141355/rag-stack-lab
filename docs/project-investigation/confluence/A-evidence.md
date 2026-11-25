@@ -45,4 +45,5 @@ tokens are redacted.
 | Smoke 9 passed / 1 skipped / 0 failed per env; gateway limit marker; reasoning-token budget | PR #12, #13, #16; findings doc, "Acceptance status" row 2 and "Live with real key" |
 | GitHub push protection misses `nvapi-` keys | Findings doc, "Acceptance status" row 6 |
 | Secret change via `envFrom` needs `rollout restart` | PR #12; findings doc, "Live with real key" |
-
+| NIMCache via Argo (8B, 2.5 min); cold start 129 s / 107 s warm; cutover, failure injection, git rollback, roll forward with smoke gates | Phase B findings doc, "Acceptance"; PRs #28, #29, #34, #40, #41, #42 |
+| Read-only cache, operator readiness vs NetworkPolicy, Bifrost private-network guard, NIM tool-calling flags | Phase B findings doc, "Things that affect work"; PRs #35, #36, #37, #39 |
