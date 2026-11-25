@@ -1,5 +1,7 @@
 # 09. Model catalogue and DEV → QA → PROD promotion
 
+> **Superseded (2026-11-26)** by [`reference/platform-gitops/`](../../reference/platform-gitops/) and the design [`2026-11-26-platform-gitops-lifecycle-design.md`](../superpowers/specs/2026-11-26-platform-gitops-lifecycle-design.md). Kept for background: the reference adds per-environment blocks, an evidence rule and rendered output.
+
 Design plus runnable examples for the two items [05 §3](05-gap-analysis.md) re-scopes: "model metadata" and "promotion". NVIDIA ships neither (no metadata API on the NIM Operator, no promotion workflow), so both become ordinary git and CI work.
 
 Example files: [`catalogue.yaml`](../../examples/model-catalogue/catalogue.yaml), [`schema.json`](../../examples/model-catalogue/schema.json), [`generate.py`](../../examples/model-catalogue/generate.py), [`promotion.gitlab-ci.yml`](../../examples/gitlab-ci/promotion.gitlab-ci.yml). Gateway background: [06](../prereading/06-bifrost-llm-gateway.md), [22](../prereading/22-bifrost-deployment.md).
