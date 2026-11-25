@@ -25,7 +25,7 @@ def crd_spec_schema(plural):
 
 def test_nim_kustomization_validates_against_both_crds():
     docs = build("lab/gpu/nim")
-    assert sorted(d["kind"] for d in docs) == ["NIMCache", "NIMService", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"]
+    assert sorted(d["kind"] for d in docs) == ["NIMCache", "NIMService", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"]
     for d in docs:
         assert d["metadata"]["namespace"] == "raglab-gpu"
     (cache,) = by(docs, "NIMCache"); (svc,) = by(docs, "NIMService")
@@ -58,6 +58,11 @@ def test_nim_network_policies():
     assert allow["ingress"] == [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "raglab-dev-gpu"}},
                                            "podSelector": {"matchLabels": {"app": "bifrost"}}}],
                                  "ports": [{"port": 8000, "protocol": "TCP"}]}]
+    op = by(docs, "NetworkPolicy", "nim-from-operator")[0]["spec"]
+    assert op["podSelector"] == {"matchLabels": {"app.kubernetes.io/component": "nim-llm"}}
+    assert op["ingress"] == [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "raglab-system"}},
+                                        "podSelector": {"matchLabels": {"app.kubernetes.io/name": "k8s-nim-operator"}}}],
+                              "ports": [{"port": 8000, "protocol": "TCP"}]}]
     eg = by(docs, "NetworkPolicy", "egress-dns-and-public-443")[0]["spec"]
     assert eg["podSelector"] == {} and eg["policyTypes"] == ["Egress"]
     blk = eg["egress"][1]["to"][0]["ipBlock"]

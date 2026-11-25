@@ -1,4 +1,4 @@
-# raglab-gpu: nothing reaches the NIM except Bifrost in raglab-dev-gpu; pods may only resolve DNS
+# raglab-gpu: nothing reaches the NIM except Bifrost in raglab-dev-gpu and the NIM Operator's readiness check; pods may only resolve DNS
 # and reach PUBLIC 443 (NGC / nvcr.io for the NIMCache job and the NIM).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -17,6 +17,20 @@ spec:
     - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: raglab-dev-gpu}}
           podSelector: {matchLabels: {app: bifrost}}
+      ports: [{port: 8000, protocol: TCP}]
+---
+# The NIM Operator decides NIMService Ready by calling the NIM's /v1/models itself. Without this rule the pod is healthy
+# but the NIMService stays NotReady forever ("connection refused" in the operator log; found live 2026-11-26).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: nim-from-operator}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: nim-llm}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: raglab-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: k8s-nim-operator}}
       ports: [{port: 8000, protocol: TCP}]
 ---
 apiVersion: networking.k8s.io/v1
