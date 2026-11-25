@@ -153,3 +153,55 @@ def test_secrets_kustomization_wrong_apiversion_fails(tmp_path):
 def test_secrets_kustomization_duplicate_key_fails(tmp_path):
     body = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [dev.sops.yaml]\nresources: [../x.sops.yaml]\n"
     assert run(tmp_path, w(tmp_path, "lab/secrets/kustomization.yaml", body)).returncode != 0
+
+# ---- Phase B: lab/gpu/secrets coverage + recipients follow .sops.yaml (R7) ----
+SESSION = "age1lsw2ne59z5y02s074k2kmrqfda5tc363hvacn24v0g60x6n0hyqs5sd89v"
+PHASE_A = "age14c2r6yt9qlvj2mdl7k4hdg2rfpcga8ehpt4dnahfx2l8dvkdm50syjrs65"
+SOPS_CFG = f"""\
+creation_rules:
+  - path_regex: ^lab/gpu/secrets/[a-z0-9-]+\\.sops\\.yaml$
+    age: {SESSION}
+  - path_regex: ^lab/secrets/[a-z0-9-]+\\.sops\\.yaml$
+    age: {PHASE_A}
+"""
+
+def enc_for(recipient):
+    return ENC_OK.replace("age1xyz", recipient)
+
+def test_gpu_plaintext_value_fails(tmp_path):
+    body = ENC_OK.replace("ENC[AES256_GCM,data:abc,iv:x,tag:y,type:str]", "hunter2")
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", body))
+    assert r.returncode == 1 and "not ENC[" in r.stdout
+
+def test_gpu_wrong_filename_fails(tmp_path):
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.yaml", ENC_OK))
+    assert r.returncode == 1 and "lab/gpu/secrets/ must be *.sops.yaml" in r.stdout
+
+def test_gpu_kustomization_index_allowed(tmp_path):
+    k = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [gpu.sops.yaml]\n"
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/kustomization.yaml", k)).returncode == 0
+    bad = k + "patches: []\n"
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/kustomization.yaml", bad)).returncode == 1
+
+def test_recipients_follow_first_matching_rule(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", enc_for(SESSION))).returncode == 0
+    assert run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", enc_for(PHASE_A))).returncode == 0
+
+def test_gpu_file_encrypted_to_phase_a_key_fails(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    r = run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", enc_for(PHASE_A)))
+    assert r.returncode == 1 and "recipients do not match" in r.stdout
+
+def test_phase_a_file_with_session_key_fails(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    both = ENC_OK.replace("age: [{recipient: age1xyz}]", f"age: [{{recipient: {PHASE_A}}}, {{recipient: {SESSION}}}]")
+    r = run(tmp_path, w(tmp_path, "lab/secrets/dev.sops.yaml", both))
+    assert r.returncode == 1 and "recipients do not match" in r.stdout
+
+def test_multi_document_gpu_file_checks_every_document(tmp_path):
+    w(tmp_path, ".sops.yaml", SOPS_CFG)
+    good = enc_for(SESSION)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", good + "---\n" + good)).returncode == 0
+    bad = good + "---\n" + enc_for(PHASE_A)
+    assert run(tmp_path, w(tmp_path, "lab/gpu/secrets/gpu.sops.yaml", bad)).returncode == 1
