@@ -25,7 +25,7 @@ def crd_spec_schema(plural):
 
 def test_nim_kustomization_validates_against_both_crds():
     docs = build("lab/gpu/nim")
-    assert sorted(d["kind"] for d in docs) == ["NIMCache", "NIMService", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"]
+    assert sorted(d["kind"] for d in docs) == ["NIMCache", "NIMService", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"]
     for d in docs:
         assert d["metadata"]["namespace"] == "raglab-gpu"
     (cache,) = by(docs, "NIMCache"); (svc,) = by(docs, "NIMService")
