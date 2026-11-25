@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "alias": "chat/small",
+      "capabilities": [
+        "chat",
+        "stream",
+        "tools"
+      ],
+      "context_window": 131072,
+      "id": "nvidia-hosted/chat/small",
+      "max_output_tokens": 4096,
+      "provider": "nvidia-hosted",
+      "upstream": "meta/llama-3.1-8b-instruct"
+    }
+  ]
+}

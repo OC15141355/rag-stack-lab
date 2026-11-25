@@ -199,7 +199,7 @@ shortest expiry that covers the lab (a separate key per env if quota allows).
    ```
 5. Sync each env (1.4) and read `kubectl -n raglab-<env> logs job/smoke | tail -20`. Expect `0 failed`,
    `[PASS] auth-negative`, `[PASS] limit-429`, `revision=<sha>`.
-6. If chat returns 404 from upstream, set `upstream.base_url` in the catalogue to
+6. If chat returns 404 from upstream, set `providers.nvidia-hosted.base_url` in the catalogue to
    `https://integrate.api.nvidia.com/v1`, regenerate (`uv run --with pyyaml python3 lab/catalogue/generate.py`) and PR.
 7. Done: `--expect-limit "rate limit violated for vk"` is Bifrost's governance message (verified live; `is_bifrost_error` is false on gateway 429s too, so it is not a usable marker). Former note: once a real
    gateway 429 confirms it.
