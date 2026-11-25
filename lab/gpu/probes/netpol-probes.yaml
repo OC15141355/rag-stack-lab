@@ -8,24 +8,38 @@ kind: ConfigMap
 metadata: {name: netpol-probe, namespace: raglab-dev-gpu}
 data:
   probe.py: |
-    import os, urllib.request
+    import os, socket, urllib.error, urllib.request
     n, u = os.environ["PROBE"], "http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready"
+    # status=<code> for ANY HTTP answer (a 503 means the policy let us through); BLOCKED only for timeout/refused/reset.
     try:
         print(f"PROBE {n} status={urllib.request.urlopen(u, timeout=8).status}")
-    except Exception as e:
-        print(f"PROBE {n} BLOCKED ({e.__class__.__name__})")
+    except urllib.error.HTTPError as e:
+        print(f"PROBE {n} status={e.code}")
+    except (urllib.error.URLError, OSError) as e:
+        r = getattr(e, "reason", e)
+        if isinstance(r, (TimeoutError, ConnectionError, socket.timeout)):
+            print(f"PROBE {n} BLOCKED ({r.__class__.__name__})")
+        else:
+            print(f"PROBE {n} ERROR ({r.__class__.__name__}): not a policy verdict")
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata: {name: netpol-probe, namespace: default}
 data:
   probe.py: |
-    import os, urllib.request
+    import os, socket, urllib.error, urllib.request
     n, u = os.environ["PROBE"], "http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready"
+    # status=<code> for ANY HTTP answer (a 503 means the policy let us through); BLOCKED only for timeout/refused/reset.
     try:
         print(f"PROBE {n} status={urllib.request.urlopen(u, timeout=8).status}")
-    except Exception as e:
-        print(f"PROBE {n} BLOCKED ({e.__class__.__name__})")
+    except urllib.error.HTTPError as e:
+        print(f"PROBE {n} status={e.code}")
+    except (urllib.error.URLError, OSError) as e:
+        r = getattr(e, "reason", e)
+        if isinstance(r, (TimeoutError, ConnectionError, socket.timeout)):
+            print(f"PROBE {n} BLOCKED ({r.__class__.__name__})")
+        else:
+            print(f"PROBE {n} ERROR ({r.__class__.__name__}): not a policy verdict")
 ---
 apiVersion: v1
 kind: Pod

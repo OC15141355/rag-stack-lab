@@ -121,3 +121,39 @@ def test_netpol_probes():
     cms = [d for d in docs if d["kind"] == "ConfigMap"]
     assert {d["metadata"]["namespace"] for d in cms} == {"raglab-dev-gpu", "default"}
     assert all("llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready" in d["data"]["probe.py"] for d in cms)
+
+
+def _probe_script():
+    docs = [d for d in yaml.safe_load_all((ROOT / "lab/gpu/probes/netpol-probes.yaml").read_text()) if d]
+    return [d for d in docs if d["kind"] == "ConfigMap"][0]["data"]["probe.py"]
+
+def _run_probe(url, tmp_path):
+    import subprocess, sys
+    src = _probe_script().replace("http://llama-8b.raglab-gpu.svc.cluster.local:8000/v1/health/ready", url)
+    f = tmp_path / "probe.py"; f.write_text(src)
+    return subprocess.run([sys.executable, str(f)], env={"PROBE": "p", "PATH": "/usr/bin"}, capture_output=True, text=True).stdout.strip()
+
+def test_probe_reports_http_codes_and_blocks_only_on_network_failure(tmp_path):
+    import threading, socket
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            code = 503 if self.path == "/503" else 200
+            self.send_response(code); self.send_header("Content-Length", "0"); self.end_headers()
+    s = HTTPServer(("127.0.0.1", 0), H); threading.Thread(target=s.serve_forever, daemon=True).start()
+    port = s.server_address[1]
+    assert _run_probe(f"http://127.0.0.1:{port}/ok", tmp_path) == "PROBE p status=200"
+    assert _run_probe(f"http://127.0.0.1:{port}/503", tmp_path) == "PROBE p status=503"
+    s.shutdown(); s.server_close()
+    assert _run_probe(f"http://127.0.0.1:{port}/ok", tmp_path).startswith("PROBE p BLOCKED (ConnectionRefusedError")
+    assert "ERROR" in _run_probe("http://no-such-host.invalid/", tmp_path)
+
+
+def test_runbook_never_pairs_tee_with_exit_code_echo():
+    text = (ROOT / "lab/gpu/README.md").read_text()
+    for line in text.splitlines():
+        assert not ("| tee" in line and "$?" in line), line   # `cmd | tee f; echo exit=$?` reports tee's status
+    assert "key_probe.py hosted --chat meta/llama-3.1-8b-instruct; echo exit=$?" in text
+    assert text.count("scripts/gpu-ansible.sh playbooks/") == 4 and "ansible-playbook -i" not in text
+    assert "mkdir -p -m 700 \"$RG\" \"$RG/evidence\"" in text and "--core" in text and "password" in text

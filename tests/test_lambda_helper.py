@@ -53,6 +53,7 @@ def api(tmp_path):
         def log_message(self, *a): pass
         def _do(self, method):
             code, obj = m.handle(self, method)
+            if code is None: return
             data = json.dumps(obj).encode()
             self.send_response(code); self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
@@ -62,14 +63,15 @@ def api(tmp_path):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     d = tmp_path / "session"; d.mkdir()
     (d / "age-key.txt").write_text("identity\n"); (d / "lambda-api-key.age").write_text("ct\n")
-    fake = tmp_path / "fake-age"; fake.write_text(f"#!/bin/sh\nprintf '%s\\n' '{FAKE_KEY}'\n"); fake.chmod(0o755)
-    m.env = {**os.environ, "RAGLAB_GPU_DIR": str(d), "RAGLAB_AGE_BIN": str(fake), "LAMBDA_POLL_SECONDS": "0.05",
-             "LAMBDA_API_BASE": f"http://127.0.0.1:{srv.server_address[1]}/api/v1/"}
+    (tmp_path / "bin").mkdir(); fake = tmp_path / "bin" / "age"; fake.write_text(f"#!/bin/sh\nprintf '%s\\n' '{FAKE_KEY}'\n"); fake.chmod(0o755)
+    m.env = {**os.environ, "RAGLAB_GPU_DIR": str(d), "RAGLAB_AGE_BIN": str(fake), "LAMBDA_POLL_SECONDS": "0.05"}
+    m.base = f"http://127.0.0.1:{srv.server_address[1]}/api/v1/"; m.srv = srv
     yield m
     srv.shutdown()
 
 def run(m, *args, env=None):
-    r = subprocess.run([sys.executable, str(SCRIPT), *args], env=env or m.env, capture_output=True, text=True)
+    base = ["--test-base", m.base] if env is None or "BASE" not in env else ["--test-base", env["BASE"]]
+    r = subprocess.run([sys.executable, str(SCRIPT), *base, *args], env=m.env, capture_output=True, text=True)
     assert FAKE_KEY not in r.stdout + r.stderr, "API key leaked to output"
     return r
 
@@ -141,5 +143,52 @@ def test_api_error_is_reported_and_scrubbed(api):
     assert r.returncode == 3 and "global/invalid-parameters" in r.stderr and "***" in r.stderr
 
 def test_plain_http_to_remote_refused(api):
-    r = run(api, "types", env={**api.env, "LAMBDA_API_BASE": "http://example.com/api/v1/"})
+    r = run(api, "types", env={"BASE": "http://example.com/api/v1/"})
     assert r.returncode == 2 and "must be https" in r.stderr
+
+
+def test_env_base_override_is_ignored_and_age_bin_must_be_age(api, tmp_path):
+    # the old env var no longer redirects the key anywhere; without --test-base the real https base is used,
+    # so only check the local refusal paths here (no network)
+    bad = tmp_path / "evil"; bad.write_text("#!/bin/sh\necho x\n"); bad.chmod(0o755)
+    r = subprocess.run([sys.executable, str(SCRIPT), "--test-base", api.base, "types"],
+                       env={**api.env, "RAGLAB_AGE_BIN": str(bad)}, capture_output=True, text=True)
+    assert r.returncode == 2 and "executable named 'age'" in r.stderr and not api.calls
+
+def test_redirects_are_refused_and_key_not_forwarded(api):
+    got = []
+    class H2(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            got.append(self.headers.get("Authorization")); self.send_response(200)
+            self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"{}")
+    s2 = ThreadingHTTPServer(("127.0.0.1", 0), H2); threading.Thread(target=s2.serve_forever, daemon=True).start()
+    api.redirect_to = f"http://127.0.0.1:{s2.server_address[1]}/x"
+    orig = api.handle
+    def handle(h, method):
+        if h.path.endswith("instance-types"):
+            h.send_response(302); h.send_header("Location", api.redirect_to); h.send_header("Content-Length", "0")
+            h.end_headers(); return None, None
+        return orig(h, method)
+    api.handle = handle
+    r = run(api, "types")
+    s2.shutdown()
+    assert r.returncode == 3 and "redirect" in r.stderr and got == []
+
+def test_terminate_nonzero_when_api_confirms_fewer(api):
+    api.instances += [inst("i-1")]
+    orig = api.handle
+    def handle(h, method):
+        if method == "POST":
+            n = int(h.headers.get("Content-Length") or 0); h.rfile.read(n)
+            return 200, {"data": {"terminated_instances": []}}
+        return orig(h, method)
+    api.handle = handle
+    r = run(api, "terminate", "--yes")
+    assert r.returncode == 1 and "check the console" in r.stderr
+
+def test_unexpected_exception_is_exit_3(api):
+    orig = api.handle
+    api.handle = lambda h, m: (200, {"data": "not-a-dict"}) if h.path.endswith("instance-types") else orig(h, m)
+    r = run(api, "types")
+    assert r.returncode == 3 and "unexpected" in r.stderr

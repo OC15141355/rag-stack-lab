@@ -10,7 +10,7 @@ Everything runs from the repo root on the Mac unless a step says "on the VM". **
 - Never in the repo, a PR, or a commit message: the VM's IP, the owner's home address, any key value. Session files
   (inventory, evidence, Argo CLI config) live in `~/.raglab-gpu/` (outside the repo, mode 700).
 - Keys reach a process only through a pipe from `age -d` (never argv, never `export`, never echo). Check
-  `history | grep -c nvapi-` is 0 at the end.
+  `fc -ln 1 | grep -c nvapi-` (zsh; bash: `history | grep -c nvapi-`) is 0 at the end.
 - Failure injection and rollback go **through git** (Argo `selfHeal` reverts `kubectl` edits). Session PRs into
   `main` are **squash-merged** (one commit each), so a rollback is a plain `git revert <sha>`. The owner merges.
 - The home lab VM stays **stopped** for the whole session: the rented cluster tracks `main`, and every merge to
@@ -23,7 +23,7 @@ Shell setup for every terminal used in the session (bash or zsh):
 cd ~/Projects/rag-stack-lab
 export RG=$HOME/.raglab-gpu SK=$HOME/.sops/raglab-gpu-session
 export KUBECONFIG=$PWD/lab/bootstrap/kubeconfig.gpu
-export ARGOCD_OPTS="--config $RG/argocd-config --port-forward --port-forward-namespace argocd --plaintext"
+export ARGOCD_OPTS="--core"        # talks to the cluster via kubeconfig.gpu; no login, no password, no token on disk
 gssh() { ssh -i "$HOME/.ssh/raglab_gpu_ed25519" -o IdentitiesOnly=yes -o ForwardAgent=no "$@"; }
 skey() { age -d -i "$SK/age-key.txt" "$SK/session-nvapi-key.age"; }      # pipe only: skey | <consumer>
 IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/inventory.ini" 2>/dev/null)
@@ -46,7 +46,8 @@ IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/in
 6. The committed secrets file decrypts with the session key and is intact (prints only OK lines):
    `SOPS_AGE_KEY_FILE=$SK/age-key.txt sops decrypt lab/gpu/secrets/gpu.sops.yaml | uv run -q --with pyyaml python3 scripts/make_gpu_sops.py verify`
    and the Phase A key cannot decrypt it:
-   `SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key.txt sops decrypt lab/gpu/secrets/gpu.sops.yaml >/dev/null 2>&1 && echo LEAK || echo ok-phase-a-key-cannot-decrypt`
+   `err=$(SOPS_AGE_KEY_FILE=$HOME/.sops/raglab-age-key.txt sops decrypt lab/gpu/secrets/gpu.sops.yaml 2>&1 >/dev/null); rc=$?; if [ $rc -eq 0 ]; then echo LEAK; elif printf '%s' "$err" | grep -q -e 'no identity matched' -e '0 successful groups'; then echo ok-phase-a-key-cannot-decrypt; else echo "UNEXPECTED (not a no-identity error): $err" | head -3; fi`
+   (a missing file, a bad path or a sops crash must not read as success: only sops' own no-matching-identity error passes)
 7. The platform charts still render to the committed summaries (the Helm repo is mutable):
    `scripts/render-gpu-platform.sh --check` prints two `unchanged` lines.
 8. Lambda: `python3 scripts/lambda.py instances` exits 0 (`live instances: 0  file systems: 0`) and
@@ -56,7 +57,7 @@ IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/in
 9. Home lab VM stopped: `ssh hv-01 'qm status 101'` prints `status: stopped`.
 10. Draft PR branches exist: `session/gpu-go` and `session/gpu-cutover` (built in plan Task 8).
 11. Calendar alarms set relative to the planned start: T+3:00 checkpoint, T+4:15 teardown, T+4:45, T+5:00.
-12. `mkdir -p -m 700 $RG/evidence && cp lab/bootstrap/inventory.gpu.example.ini $RG/inventory.ini && chmod 600 $RG/inventory.ini`
+12. `mkdir -p -m 700 "$RG" "$RG/evidence" && cp lab/bootstrap/inventory.gpu.example.ini $RG/inventory.ini && chmod 600 $RG/inventory.ini`
 
 ## 2. Timeline
 | Time | Step (section) | Gate |
@@ -76,27 +77,25 @@ IP=$(awk -F'ansible_host=' '/ansible_host/{split($2,a," "); print a[1]}' "$RG/in
 ## 3. Session
 
 ### 3.1 Rent and check the host (T+0:00)
-1. `python3 scripts/lambda.py launch --type gpu_1x_a100_sxm4 --region us-east-1 --wait | tee $RG/evidence/launch.txt`
-   (or another type/region from step 1.8). Expect `LAUNCHED <id> at <UTC>` then a line with `status=active ip=...`.
+1. `python3 scripts/lambda.py launch --type gpu_1x_a100_sxm4 --region us-east-1 --wait > $RG/evidence/launch.txt; rc=$?; cat $RG/evidence/launch.txt; echo exit=$rc`
+   (or another type/region from step 1.8). Expect `exit=0`, `LAUNCHED <id> at <UTC>` then a line with `status=active ip=...`.
 2. Put the IP into `$RG/inventory.ini` (replace the placeholder), then re-run the `IP=` line of the shell setup.
 3. First SSH (accept the host key; there is no out-of-band fingerprint, trust on first use):
    `gssh ubuntu@$IP 'nvidia-smi --query-gpu=name,memory.total --format=csv,noheader; sudo -n true && echo SUDO_OK'`
    Expect `NVIDIA A100-SXM4-40GB, 40960 MiB` (or the PCIe name) and `SUDO_OK`.
+   Then check for JupyterLab: `gssh ubuntu@$IP 'systemctl list-units --all --no-legend | grep -i jupyter || echo no-jupyter-unit; ss -ltn | grep -E ":8888|:8889" || echo no-jupyter-port'`.
+   Playbook 01 stops and disables any jupyter unit; re-run this check after 01 and expect `no-jupyter-unit`.
 4. Exposure probe from the Mac (criterion 7): `for p in 22 80 443 2379 6443 8080 10250; do nc -z -G 3 $IP $p >/dev/null 2>&1 && echo "OPEN $p" || echo "closed $p"; done | tee $RG/evidence/exposure.txt`
    Expect `OPEN 22` only. (ICMP from the home address is also allowed by the account firewall: recorded, accepted.)
 
 ### 3.2 Bootstrap (T+0:10)
 ```bash
-cd lab/bootstrap
-ansible-playbook -i $RG/inventory.ini -e gpu_session=true playbooks/01-platform.yml
-ansible-playbook -i $RG/inventory.ini -e gpu_session=true playbooks/04-gpu-prep.yml
-cd ../..
+scripts/gpu-ansible.sh playbooks/01-platform.yml      # wrapper: always the session inventory + -e gpu_session=true
+scripts/gpu-ansible.sh playbooks/04-gpu-prep.yml
 gssh -f -N -o ExitOnForwardFailure=yes -L 6443:127.0.0.1:6443 ubuntu@$IP     # API tunnel (k3s API is not exposed)
 kubectl get nodes                                                             # one node Ready
-cd lab/bootstrap
-ansible-playbook -i $RG/inventory.ini -e gpu_session=true playbooks/02-argocd.yml
-ansible-playbook -i $RG/inventory.ini -e gpu_session=true playbooks/03-handover.yml
-cd ../..
+scripts/gpu-ansible.sh playbooks/02-argocd.yml
+scripts/gpu-ansible.sh playbooks/03-handover.yml
 ```
 - 01: the GPU gate task prints the A100; "Verify secrets encryption" ok. 04: all gates ok; it writes
   `$RG/evidence/gpu-prep.txt` (containerd version, NRI socket, host toolkit, disk). If 04 fails on containerd or NRI,
@@ -105,8 +104,9 @@ cd ../..
   smoke hook on the hosted provider). Its success is the **hosted baseline**:
   `kubectl -n raglab-dev-gpu logs job/smoke | tail -40 | tee $RG/evidence/smoke-hosted-baseline.txt`
   must show `0 failed`, `[PASS] auth-negative`, `[PASS] limit-429` and `revision=<main SHA>`.
-- Argo CLI login (password read into a variable, never printed):
-  `PW=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d); argocd login argocd-server --username admin --password "$PW"; unset PW`
+- Argo CLI: no login. `ARGOCD_OPTS=--core` (shell setup) makes `argocd` use `kubeconfig.gpu` directly; run once
+  `kubectl config set-context --current --namespace=argocd`. The admin password is never read.
+- The playbooks refuse a mode mismatch (Phase A inventory/kubeconfig in GPU mode or the reverse) before touching anything.
 
 ### 3.3 GPU checks (T+0:35)
 1. `kubectl get node -o jsonpath='{.items[0].status.allocatable.nvidia\.com/gpu}{"\n"}'` prints `1`.
@@ -209,7 +209,7 @@ for p in raglab-dev-gpu/probe-as-bifrost raglab-dev-gpu/probe-unlabelled default
 kubectl delete -f lab/gpu/probes/netpol-probes.yaml
 ```
 Expect `PROBE probe-as-bifrost status=200`, `PROBE probe-unlabelled BLOCKED (...)`, `PROBE probe-other-ns BLOCKED (...)`.
-A `status=200` on either negative probe means k3s is not enforcing the policy: record it as a finding.
+A `status=<any code>` (200, 503, ...) on either negative probe means the connection got through, so k3s is not enforcing the policy: record it as a finding. `ERROR (...)` is not a policy verdict (DNS or other): investigate.
 
 ### 3.8 Cutover (dev-gpu: hosted to nim-local)
 ```bash
@@ -270,7 +270,7 @@ item); do not change NIM flags under the clock unless more than 45 min remain be
    (`git revert --no-edit <FAIL-merge> <ROLLBACK-merge>`), merge, then record the **warm-cache** cold start with the 3.6
    command (`| tee $RG/evidence/cold-start-warm.txt`) and the smoke tail (`smoke-rollforward.txt`).
 
-### 3.10 Evidence and isolation probe (before terminating)
+### 3.10 Evidence and isolation probe (before terminating; 15 minutes at most, then section 5 regardless)
 ```bash
 kubectl -n raglab-gpu get nimcache,nimservice -o yaml | python3 -c '
 import sys, yaml
@@ -297,8 +297,8 @@ Then go straight to section 5.
 3. A second session may be scheduled from the findings; it starts again at section 1.
 
 ## 5. Teardown — TERMINATE FIRST
-1. `python3 scripts/lambda.py terminate --yes --wait | tee $RG/evidence/terminate.txt` (expect `TERMINATED ... at <UTC>`).
-2. `python3 scripts/lambda.py instances | tee $RG/evidence/instances-after.txt; echo exit=$?` (expect
+1. `python3 scripts/lambda.py terminate --yes --wait > $RG/evidence/terminate.txt; rc=$?; cat $RG/evidence/terminate.txt; echo exit=$rc` (expect `TERMINATED ... at <UTC>` and `exit=0`; any other exit: the console, NOW).
+2. `python3 scripts/lambda.py instances > $RG/evidence/instances-after.txt; rc=$?; cat $RG/evidence/instances-after.txt; echo exit=$rc` (expect
    `live instances: 0  file systems: 0`, `exit=0`). Check the console too: no instance, no file system.
 3. Kill the tunnel: `pkill -f 'L 6443:127.0.0.1:6443'`. The account firewall rule is a standing account setting and
    stays (it admits nothing without an instance); note it in the findings.
@@ -307,7 +307,7 @@ Then go straight to section 5.
 ## 6. Key revocation and negative probes (same day, in this order)
 1. **Session nvapi key:** revoke it in the NVIDIA/NGC console (revoke, not just expire). Then both must print `REJECTED`
    and exit 1 (exit 2 = inconclusive: retry later, it proves nothing):
-   `skey | python3 scripts/key_probe.py hosted; echo exit=$?` and
+   `skey | python3 scripts/key_probe.py hosted --chat meta/llama-3.1-8b-instruct; echo exit=$?` (without `--chat` the probe is INCONCLUSIVE by design: `/v1/models` answers without a key) and
    `skey | python3 scripts/key_probe.py nvcr --repo nim/meta/llama-3.1-8b-instruct --tag 2.1.7; echo exit=$?`
 2. **Lambda API key:** delete the session key in the Lambda console, then
    `python3 scripts/lambda.py instances; echo exit=$?` must fail with `HTTP 401` (exit 3).
@@ -317,8 +317,9 @@ Then go straight to section 5.
    rm -f $SK/age-key.txt $SK/session-nvapi-key.age $SK/lambda-api-key.age && rmdir $SK
    rm -f ~/.ssh/raglab_gpu_ed25519 ~/.ssh/raglab_gpu_ed25519.pub
    ssh-keygen -R "$IP"; rm -f lab/bootstrap/kubeconfig.gpu $RG/inventory.ini; rm -rf $RG/argocd-config
-   history | grep -c -e nvapi- -e 'AGE-SECRET'     # 0
+   fc -ln 1 | grep -c -e nvapi- -e 'AGE-SECRET'     # 0 (zsh; bash: history | grep -c ...)
    ```
+   Restart the home lab VM and run the Phase A regression (lab/README.md: session start, then the read-back).
    Keep `$RG/evidence/` until the findings are written (it holds no key), then `rm -rf $RG`.
 
 ## 7. Cleanup PRs (after billing has stopped)

@@ -4,11 +4,23 @@
 - hosts: localhost
   connection: local
   gather_facts: false
+  vars:
+    rfc1918_re: '^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$'
+  vars_files:
+    - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
   tasks:
     - name: Inventory group raglab must not be empty
       ansible.builtin.assert:
         that: groups['raglab'] | default([]) | length > 0
         fail_msg: "inventory.ini has no hosts in [raglab] (copy inventory.example.ini)"
+    - name: "Pre-flight: Phase A targets a private (RFC1918) address only, GPU mode only a non-private one"
+      ansible.builtin.assert:
+        that: >-
+          (hostvars[item].ansible_host | default('') | string is match(rfc1918_re)) == (not (gpu_host_prep | bool))
+        fail_msg: >-
+          mode/host mismatch for {{ item }}: Phase A (no gpu_session) needs a private LAN address,
+          -e gpu_session=true needs the rented VM's public address (wrong inventory or missing -e?)
+      loop: "{{ groups['raglab'] }}"
 
 - hosts: raglab
   become: true
@@ -17,6 +29,12 @@
   vars_files:
     - "../vars/{{ 'gpu-session' if (gpu_session | default(false) | bool) else 'phase-a' }}.yml"
   tasks:
+    - name: "Pre-flight: Phase A host has no NVIDIA driver (a GPU host means the wrong inventory or a missing -e gpu_session=true)"
+      ansible.builtin.shell: if command -v nvidia-smi >/dev/null 2>&1; then echo present; else echo absent; fi
+      register: smi_pre
+      changed_when: false
+      failed_when: smi_pre.stdout != 'absent'
+      when: not (gpu_host_prep | bool)
     - name: Wait for first-boot cloud-init (sshd answers before it finishes; k3s install races it otherwise)
       ansible.builtin.command: cloud-init status --wait
       changed_when: false
@@ -42,6 +60,14 @@
         done
       register: hostrt
       changed_when: "'stopped' in hostrt.stdout"
+      when: gpu_host_prep | bool
+    - name: "GPU: stop and disable JupyterLab if the image ships it (an extra listener on a rented, public host)"
+      ansible.builtin.shell: |
+        for u in $(systemctl list-unit-files --no-legend 2>/dev/null | awk '/jupyter/{print $1}'); do
+          systemctl disable --now "$u" && echo "stopped $u"
+        done
+      register: jupyter
+      changed_when: "'stopped' in jupyter.stdout"
       when: gpu_host_prep | bool
     - name: Install and enable qemu-guest-agent (the cloud image lacks it; needed for qm shutdown with agent=1)
       ansible.builtin.apt:

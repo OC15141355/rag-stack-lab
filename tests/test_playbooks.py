@@ -78,13 +78,16 @@ def fake_env(tmp_path, apps):
     for rel in (".sops/raglab-age-key.txt", ".sops/raglab-gpu-session/age-key.txt"):
         k = home / rel; k.parent.mkdir(parents=True, exist_ok=True)
         k.write_text("AGE-SECRET-" + "KEY-1" + "Q" * 58 + "\n"); k.chmod(0o600)   # fake, built at runtime
-    env = {**os.environ, "PATH": f"{b}:{os.environ['PATH']}", "HOME": str(home), "FAKE_LOG": str(log),
+    kc = tmp_path / "kc"; kc.mkdir()
+    (kc / "kubeconfig").write_text("clusters:\n- cluster:\n    server: https://192.168.0.50:6443\n")
+    (kc / "kubeconfig.gpu").write_text("clusters:\n- cluster:\n    server: https://127.0.0.1:6443\n")
+    env = {"KCDIR": str(kc), **os.environ, "PATH": f"{b}:{os.environ['PATH']}", "HOME": str(home), "FAKE_LOG": str(log),
            "FAKE_APPS": str(appsf), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ans"), "ANSIBLE_NOCOLOR": "1"}
     return env, log
 
 def play(pb, mode, env):
     return subprocess.run(["ansible-playbook", "-i", "localhost,", "-c", "local", "-e", f"gpu_session={mode}",
-                           "-e", "ansible_python_interpreter={{ ansible_playbook_python }}", f"playbooks/{pb}"],
+                           "-e", f"kubeconfig_dir={env['KCDIR']}", "-e", "ansible_python_interpreter={{ ansible_playbook_python }}", f"playbooks/{pb}"],
                           cwd=BOOT, env=env, capture_output=True, text=True)
 
 def logged(log):
@@ -97,7 +100,7 @@ def test_handover_runs_against_the_right_cluster_and_apps(tmp_path, mode, apps, 
     r = play("03-handover.yml", mode, env)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]
     calls = logged(log)
-    assert calls and all(Path(k).resolve() == (BOOT / kc).resolve() for k, _ in calls)
+    assert calls and all(Path(k).resolve() == (Path(env["KCDIR"]) / kc).resolve() for k, _ in calls)
 
 def expected_02(ha, key):
     return ([f"apply --server-side -f {ha}/namespaces.yaml", f"apply --server-side -f {ha}/cmp-plugin.yaml",
@@ -141,3 +144,68 @@ def test_argocd_gpu_sequence(tmp_path):
         "apply --server-side -f LAB/gpu/argocd/hand-applied/root-app.yaml"]
     assert all(Path(k).name == "kubeconfig.gpu" for k, c in logged(log) if k != "helm")
     assert "raglab-age-key.txt" not in log.read_text(), "the Phase A age key is never used in GPU mode"
+
+
+def set_kc(env, name, server):
+    (Path(env["KCDIR"]) / name).write_text(f"clusters:\n- cluster:\n    server: {server}\n")
+
+@needs_ansible
+@pytest.mark.parametrize("pb", ["02-argocd.yml", "03-handover.yml"])
+@pytest.mark.parametrize("server", ["https://203.0.113.9:6443", "https://127.0.0.1:6443", "https://172.32.0.1:6443"])
+def test_phase_a_refuses_a_kubeconfig_that_is_not_private(tmp_path, pb, server):
+    env, log = fake_env(tmp_path, PHASE_A_REQUIRED)
+    set_kc(env, "kubeconfig", server)
+    r = play(pb, "false", env)
+    assert r.returncode != 0 and "does not fit the mode" in r.stdout + r.stderr
+    assert not log.exists() or log.read_text() == "", "no kubectl/helm ran"
+
+@needs_ansible
+@pytest.mark.parametrize("pb", ["02-argocd.yml", "03-handover.yml"])
+@pytest.mark.parametrize("server", ["https://192.168.0.50:6443", "https://203.0.113.9:6443", "https://127.0.0.1.evil.example:6443"])
+def test_gpu_mode_requires_the_tunnel_server(tmp_path, pb, server):
+    env, log = fake_env(tmp_path, GPU_REQUIRED)
+    set_kc(env, "kubeconfig.gpu", server)
+    r = play(pb, "true", env)
+    assert r.returncode != 0 and "does not fit the mode" in r.stdout + r.stderr
+
+def inv(tmp_path, host):
+    f = tmp_path / "inv.ini"; f.write_text(f"[raglab]\nraglab-vm ansible_host={host} ansible_user=ubuntu\n[local]\nlocalhost ansible_connection=local\n"); return f
+
+def preflight(tmp_path, host, mode):
+    env, _ = fake_env(tmp_path, [])
+    return subprocess.run(["ansible-playbook", "-i", str(inv(tmp_path, host)), "-l", "localhost", "-e", f"gpu_session={mode}",
+                           "playbooks/01-platform.yml"], cwd=BOOT, env=env, capture_output=True, text=True)
+
+@needs_ansible
+@pytest.mark.parametrize("mode,host,ok", [("false", "192.168.0.50", True), ("false", "10.1.2.3", True), ("false", "172.20.1.1", True),
+                                          ("false", "203.0.113.9", False), ("false", "172.32.0.1", False),
+                                          ("true", "203.0.113.9", True), ("true", "192.168.0.50", False)])
+def test_01_host_address_matches_mode(tmp_path, mode, host, ok):
+    r = preflight(tmp_path, host, mode)
+    assert (r.returncode == 0) == ok, r.stdout[-1500:] + r.stderr[-500:]
+    if not ok:
+        assert "mode/host mismatch" in r.stdout + r.stderr
+
+def test_01_has_nvidia_smi_preflight_for_phase_a():
+    text = (BOOT / "playbooks/01-platform.yml").read_text()
+    assert "failed_when: smi_pre.stdout != 'absent'" in text and "when: not (gpu_host_prep | bool)" in text
+
+def test_gpu_01_disables_jupyter_units():
+    text = (BOOT / "playbooks/01-platform.yml").read_text()
+    assert "jupyter" in text and "systemctl disable --now" in text
+
+def test_k3s_not_bound_to_loopback_only():
+    # in-cluster clients reach the apiserver on the node IP: --bind-address 127.0.0.1 would break Argo CD and the operators
+    assert "--bind-address" not in mode_vars("gpu-session")["k3s_exec"]
+
+def test_gpu_ansible_wrapper(tmp_path):
+    b = tmp_path / "bin"; b.mkdir()
+    (b / "ansible-playbook").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$FAKE_ARGS"; pwd >> "$FAKE_ARGS"\n'); (b / "ansible-playbook").chmod(0o755)
+    env = {**os.environ, "PATH": f"{b}:{os.environ['PATH']}", "RG": str(tmp_path / "rg"), "FAKE_ARGS": str(tmp_path / "args")}
+    r = subprocess.run([str(ROOT / "scripts/gpu-ansible.sh"), "playbooks/03-handover.yml"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    got = (tmp_path / "args").read_text().split()
+    assert got[:5] == ["-i", str(tmp_path / "rg/inventory.ini"), "-e", "gpu_session=true", "playbooks/03-handover.yml"]
+    assert Path(got[-1]).resolve() == BOOT.resolve()
+    for bad in (["-i", "x", "playbooks/01-platform.yml"], ["-e", "gpu_session=false", "playbooks/01-platform.yml"], []):
+        assert subprocess.run([str(ROOT / "scripts/gpu-ansible.sh"), *bad], env=env, capture_output=True).returncode == 2

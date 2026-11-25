@@ -10,7 +10,8 @@
 The API key is read with `age -d` from ~/.sops/raglab-gpu-session/lambda-api-key.age (identity age-key.txt in
 the same dir; override the dir with RAGLAB_GPU_DIR, the binary with RAGLAB_AGE_BIN) into this process only.
 It is never printed, never put on argv, never written to disk, and never sent anywhere but the API base
-(LAMBDA_API_BASE, default https://cloud.lambda.ai/api/v1/; plain http is refused except for 127.0.0.1 tests).
+(pinned to https://cloud.lambda.ai/api/v1/; only the explicit --test-base flag, used by the tests, overrides it,
+and plain http is refused except for 127.0.0.1). Redirects are refused (the key must never follow one).
 Exit: 0 ok, 1 condition not met (instances exist / wait timed out), 2 usage or local error, 3 API error.
 """
 from __future__ import annotations
@@ -41,12 +42,32 @@ def scrub(text: str) -> str:
     return text.replace(_KEY, "***") if _KEY else text
 
 
+TEST_BASE: str | None = None
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ApiError(f"refusing HTTP {code} redirect (the API key is never sent to a redirect target)")
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
 def api_base() -> str:
-    base = os.environ.get("LAMBDA_API_BASE", DEFAULT_BASE)
+    base = TEST_BASE or DEFAULT_BASE
     u = urllib.parse.urlparse(base)
     if not (u.scheme == "https" or (u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost"))):
-        die("LAMBDA_API_BASE must be https (plain http only for 127.0.0.1)")
+        die("API base must be https (plain http only for 127.0.0.1)")
     return base if base.endswith("/") else base + "/"
+
+
+def age_bin() -> str:
+    b = os.environ.get("RAGLAB_AGE_BIN")
+    if b is None:
+        return "age"
+    if not (os.path.isabs(b) and os.path.basename(b) == "age" and os.access(b, os.X_OK)):
+        die("RAGLAB_AGE_BIN must be an absolute path to an executable named 'age'")
+    return b
 
 
 def api_key() -> str:
@@ -57,7 +78,7 @@ def api_key() -> str:
         for f in (ident, enc):
             if not f.is_file():
                 die(f"missing {f}")
-        r = subprocess.run([os.environ.get("RAGLAB_AGE_BIN", "age"), "-d", "-i", str(ident), str(enc)],
+        r = subprocess.run([age_bin(), "-d", "-i", str(ident), str(enc)],
                            capture_output=True, text=True)
         if r.returncode != 0 or not r.stdout.strip():
             die("age -d failed for the Lambda API key (output suppressed)")
@@ -72,7 +93,7 @@ def api(method: str, path: str, body: dict | None = None):
         "Authorization": f"Bearer {api_key()}", "User-Agent": USER_AGENT,
         "Accept": "application/json", **({"Content-Type": "application/json"} if data else {})})
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with OPENER.open(req, timeout=60) as r:
             return json.loads(r.read().decode() or "{}").get("data")
     except urllib.error.HTTPError as e:
         try:
@@ -174,6 +195,9 @@ def cmd_terminate(a) -> int:
     d = api("POST", "instance-operations/terminate", {"instance_ids": targets}) or {}
     done = [i.get("id") for i in d.get("terminated_instances", [])]
     print(f"TERMINATE requested at {now()}: {' '.join(done) or ' '.join(targets)}")
+    if sorted(done) != sorted(targets):
+        print(f"lambda: API confirmed {done} but {targets} were requested; check the console NOW", file=sys.stderr)
+        return 1
     if not a.wait:
         return 0
     deadline = time.time() + a.timeout
@@ -188,6 +212,7 @@ def cmd_terminate(a) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="lambda.py", description=__doc__.splitlines()[0])
+    ap.add_argument("--test-base", help=argparse.SUPPRESS)
     sub = ap.add_subparsers(dest="cmd", required=True)
     t = sub.add_parser("types"); t.add_argument("--all", action="store_true")
     l = sub.add_parser("launch")
@@ -200,11 +225,18 @@ def main(argv=None) -> int:
     x.add_argument("--yes", action="store_true"); x.add_argument("--id")
     x.add_argument("--wait", action="store_true"); x.add_argument("--timeout", type=float, default=600)
     a = ap.parse_args(argv)
+    global TEST_BASE
+    TEST_BASE = a.test_base
     try:
         return {"types": cmd_types, "launch": cmd_launch, "status": cmd_status,
                 "instances": cmd_instances, "terminate": cmd_terminate}[a.cmd](a)
     except ApiError as e:
         print(f"lambda: API error: {e}", file=sys.stderr)
+        return 3
+    except SystemExit:
+        raise
+    except Exception as e:  # never a traceback that could echo a request: one clear line, exit 3
+        print(scrub(f"lambda: unexpected {type(e).__name__}: {e}")[:300], file=sys.stderr)
         return 3
 
 
