@@ -16,6 +16,11 @@ spec:
     readOnly: false   # NIM 2.1.7 refuses a read-only cache: "Cache directory /model-store is not accessible" (found live)
     sharedMemorySizeLimit: 8Gi
   labels: {app.kubernetes.io/component: nim-llm}
+  # OpenAI tool_choice "auto" needs these on NIM 2.1.7 (vLLM): without them, HTTP 400
+  # '"auto" tool choice requires --enable-auto-tool-choice' (found live 2026-11-26).
+  env:
+    - {name: NIM_ENABLE_AUTO_TOOL_CHOICE, value: "1"}
+    - {name: NIM_TOOL_CALL_PARSER, value: llama3_json}
   resources:
     requests: {cpu: "4", memory: 24Gi, nvidia.com/gpu: 1}
     limits: {memory: 24Gi, nvidia.com/gpu: 1}
