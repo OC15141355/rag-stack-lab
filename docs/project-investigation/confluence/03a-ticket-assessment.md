@@ -62,6 +62,8 @@ scope and revised acceptance criteria; plus missing tickets.
 - **Revised ACs:** all models have complete entries; Bifrost limits are generated from the catalogue; the catalogue is
   queryable (served JSON / Bifrost `/v1/models`).
 
+> **[MACRO: Info panel]** Verified in lab (2026-11-25): a git catalogue generating Bifrost config works end to end, and limit changes propagate to a running gateway (`source_of_truth: config.json`), verified via read-back `GET /api/governance/rate-limits` (admin basic auth).
+
 ## 5. DEV → QA → PROD promotion
 
 - **As written:** pipeline, gates (smoke tests before PROD), approvals/audit, reproducibility.
@@ -70,6 +72,8 @@ scope and revised acceptance criteria; plus missing tickets.
   tests (see *Smoke tests*) gate QA → PROD; protected environments/approvals; audit = MR + deployment history.
 - **Revised ACs:** unchanged in spirit: promotion logged who/when/what; smoke tests gate QA → PROD; identical
   artefacts across envs.
+
+> **[MACRO: Info panel]** Verified in lab (2026-11-25): MR-based promotion with smoke evidence worked twice, dev to qa to prod. Promotion branches must use merge commits (not squash). "Require up to date" on env branches deadlocks the second promotion.
 
 ## Missing tickets / follow-on work
 

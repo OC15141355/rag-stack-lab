@@ -65,3 +65,9 @@ NVIDIA documents **no DEV → QA → PROD promotion model** for NIMs, NeMo micro
 approach is per-environment overlays of the **same pinned spec** (image digest, profile, served name) in git,
 promoted by merge request, with CI gates. Argo CD has no built-in health check for NIM CRDs, so add custom
 health checks and protect caches from pruning.
+
+> **[MACRO: Info panel]** Verified in lab (2026-11-25): NIM Operator 3.1.4 runs without a GPU (controller only), with the NeMo CRDs unused.
+> A `NIMService` with `replicas: 0` reports NotReady, so Argo needs a custom health check; one is in the repo examples.
+> The operator ClusterRole can read and write Secrets and create pods in all namespaces (rendered chart).
+> The chart's default image is a floating tag (`release-3.0` with `Always` pull); pin by digest.
+> Argo CD has no built-in health check for the NIM CRDs.

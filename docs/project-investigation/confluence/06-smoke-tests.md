@@ -50,6 +50,12 @@ Project endpoint.**
 |---|---|---|---|---|---|---|---|---|---|
 | | | | | | | | | | |
 
+> **[MACRO: Info panel]** Verified in lab (2026-11-25): real results were 9 passed, 1 skipped (tools, by capability),
+> 0 failed in each env. The gateway-specific limit marker is the message `rate limit violated for vk`;
+> `is_bifrost_error` is false on gateway 429s, so it cannot identify them. A 4-request probe burst is used because a
+> window rollover can flake a 3-request burst. Reasoning models spend most output tokens on reasoning (170 of 174 for
+> a one-word answer), so budget `max_tokens`.
+
 ## Not covered (follow-ups)
 
 - Answer quality: add a small eval set as a separate, initially non-blocking job.

@@ -21,6 +21,18 @@ L = likelihood, I = impact.
 | R10 | **Operator/CRD upgrade stream** (GPU Operator, NIM Operator, NIMs) | M | M | Pinned versions; upgrade runbook; DEV first |
 | R11 | **Knowledge concentration**: manual steps known by few people | M | H | Automate and write runbooks as you go |
 
+**Verified in lab (2026-11-25), additional risks:**
+
+| # | Risk | Mitigation |
+|---|---|---|
+| L1 | Bifrost virtual keys deny all upstream keys unless `key_ids` is set; schema-valid does not mean working | Set `key_ids` (e.g. `["*"]`); smoke-test a real chat call |
+| L2 | Bifrost logs prompt content by default | Set `disable_content_logging` explicitly |
+| L3 | Container `args` break the Bifrost entrypoint (unknown flags loop forever) | No `args`; configure with `APP_*` env vars |
+| L4 | Argo CD's `default` project allows everything | Lock it down |
+| L5 | App-of-apps on `main` means whoever merges to `main` controls everything it defines | Protect `main`; review merges as production changes |
+| L6 | GitHub push protection does not recognise NVIDIA keys | gitleaks with a custom `nvapi-` rule in pre-commit and CI |
+| L7 | Secret changes via `envFrom` do not restart pods | `rollout restart` after a Secret change |
+
 ## Risks of not changing
 
 | Risk | Impact |
