@@ -168,6 +168,9 @@ def main() -> int:
     except CatalogueError as e:
         print(f"CATALOGUE ERROR: {e}", file=sys.stderr)
         return 2
+    except KeyError as e:
+        print(f"CATALOGUE ERROR: missing required key {e}", file=sys.stderr)
+        return 2
     return drift
 
 

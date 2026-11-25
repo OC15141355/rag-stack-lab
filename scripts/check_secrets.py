@@ -13,7 +13,8 @@ Rules:
   R6 undecodable files under a secrets dir and explicit paths that do not exist are findings
   R7 the age recipients of every secrets file equal those of the FIRST .sops.yaml creation rule whose
      path_regex matches it (sops semantics), so a GPU-session file can never carry the Phase A key
-     and vice versa (skipped when --root has no .sops.yaml)
+     and vice versa and carry no pgp/kms/gcp_kms/azure_kv/hc_vault/key_groups entries; a missing .sops.yaml
+     under --root is itself a finding (fails closed)
 Exit 0 clean, 1 findings, 2 usage.
 """
 from __future__ import annotations
@@ -35,6 +36,7 @@ SOPS_KEYS = {"kms", "gcp_kms", "azure_kv", "hc_vault", "age", "pgp", "lastmodifi
              "unencrypted_comment_regex", "encrypted_comment_regex", "mac_only_encrypted",
              "version", "shamir_threshold", "key_groups"}
 PLAIN_OK = {("apiVersion",), ("kind",), ("type",), ("metadata", "name"), ("metadata", "namespace")}
+NON_AGE = ("pgp", "kms", "gcp_kms", "azure_kv", "hc_vault", "key_groups")
 SECRET_DIRS = ("lab/secrets/", "lab/gpu/secrets/")
 
 def secrets_dir(rel: str) -> str | None:
@@ -61,6 +63,9 @@ def check_recipients(rel: str, text: str, rules) -> list[str]:
         return []   # already reported by check_secret_file
     out = []
     for d in docs:
+        extra = [k for k in NON_AGE if d["sops"].get(k)]
+        if extra:
+            out.append(f"{rel}: sops block has non-age key types ({', '.join(extra)})")
         got = {a.get("recipient") for a in d["sops"].get("age") or [] if isinstance(a, dict)}
         if got != want:
             out.append(f"{rel}: sops age recipients do not match the first matching .sops.yaml rule")
@@ -175,8 +180,11 @@ def main() -> int:
             text = data.decode("utf-8", errors="replace")
         if in_secrets:
             findings += check_secret_file(rel, text)
-            if rules is not None and not rel.endswith("/kustomization.yaml"):
-                findings += check_recipients(rel, text, rules)
+            if not rel.endswith("/kustomization.yaml"):
+                if rules is None:
+                    findings.append(f"{rel}: no .sops.yaml: cannot verify recipients")
+                else:
+                    findings += check_recipients(rel, text, rules)
         findings += check_text(rel, text)
     for f in findings: print(f"FINDING {f}")
     return 1 if findings else 0

@@ -8,6 +8,8 @@ while IFS= read -r -d '' f; do staged+=("$f"); done < <(git diff --cached -z --n
 [[ ${#staged[@]} -eq 0 ]] && exit 0
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 for f in "${staged[@]}"; do mkdir -p "$tmp/$(dirname "$f")"; git show ":$f" > "$tmp/$f"; done
+# recipients are checked against the staged .sops.yaml (fall back to HEAD's), which may not be in the change
+git show :.sops.yaml > "$tmp/.sops.yaml" 2>/dev/null || git show HEAD:.sops.yaml > "$tmp/.sops.yaml" 2>/dev/null || rm -f "$tmp/.sops.yaml"
 uv run --quiet --with pyyaml python3 scripts/check_secrets.py --root "$tmp" "${staged[@]}"
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks git . --config .gitleaks.toml --no-banner --redact --staged

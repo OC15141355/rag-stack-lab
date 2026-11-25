@@ -86,3 +86,11 @@ def test_emit_refuses_a_terminal(tmp_path):
 def test_gpu_secrets_kustomization_lists_only_gpu_file():
     k = yaml.safe_load((ROOT / "lab/gpu/secrets/kustomization.yaml").read_text())
     assert k == {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["gpu.sops.yaml"]}
+
+
+def test_emit_refuses_a_regular_file(tmp_path):
+    out = tmp_path / "plain.yaml"
+    with open(out, "w") as f:
+        r = subprocess.run([sys.executable, str(SCRIPT), "emit"], env=setup(tmp_path), stdout=f,
+                           stderr=subprocess.PIPE, text=True)
+    assert r.returncode == 2 and "refusing" in r.stderr and out.read_text() == ""

@@ -227,3 +227,14 @@ def test_dev_gpu_cutover_to_nim_local(tmp_path):
 def test_bad_serving_rejected(tmp_path, mutate, msg):
     r = gen(tmp_path / "o", "--catalogue", str(write_cat(tmp_path, mutate)))
     assert r.returncode == 2 and msg in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda c: c.pop("default_provider"),
+    lambda c: c.pop("providers"),
+    lambda c: c["providers"]["nvidia-hosted"].pop("key_name"),
+    lambda c: c["providers"]["nvidia-hosted"].pop("base_url"),
+])
+def test_missing_catalogue_keys_are_clean_errors(tmp_path, mutate):
+    r = gen(tmp_path / "o", "--catalogue", str(write_cat(tmp_path, mutate)))
+    assert r.returncode == 2 and "CATALOGUE ERROR" in r.stderr and "Traceback" not in r.stderr, r.stderr

@@ -13,7 +13,7 @@ Session files (override the directory with RAGLAB_GPU_DIR, the age binary with R
 Exit 0 ok, 1 verify failure, 2 usage/input error.
 """
 from __future__ import annotations
-import argparse, base64, json, os, re, secrets, subprocess, sys
+import argparse, base64, json, os, re, secrets, stat, subprocess, sys
 from pathlib import Path
 
 try:
@@ -80,8 +80,8 @@ def build(key: str) -> list[dict]:
 
 
 def emit() -> int:
-    if sys.stdout.isatty():
-        die("refusing to write secrets to a terminal; pipe into `sops encrypt`")
+    if sys.stdout.isatty() or stat.S_ISREG(os.fstat(1).st_mode):
+        die("refusing to write secrets to a terminal or a file; pipe into `sops encrypt`")
     sys.stdout.write(yaml.safe_dump_all(build(read_session_key()), sort_keys=False, default_flow_style=False))
     return 0
 
