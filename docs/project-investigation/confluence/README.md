@@ -29,6 +29,7 @@ and re-paste.
 | 04 NeMo Helix | [prereading/28](../../prereading/28-nemo-helix.md) |
 | 06 Smoke tests | [investigation/10](../../investigation/10-smoke-tests.md), [examples/smoke](../../../examples/smoke/) |
 | 07 Recommendation | [investigation/08](../../investigation/08-target-state-reference.md) (target state), [investigation/12](../../investigation/12-cutover-runbook-template.md) (cutover) |
+| 09 Target architecture review | [platform GitOps design](../../superpowers/specs/2026-11-26-platform-gitops-lifecycle-design.md), [reference template](../../../reference/platform-gitops/), [Phase B findings](../../raglab-phase-b-findings.md) |
 | B Speech models | [investigation/14](../../investigation/14-speech-nims-under-the-operator.md) |
 | Open question Q6 (NVIDIA) | [investigation/13](../../investigation/13-questions-for-nvidia.md) |
 
@@ -42,7 +43,7 @@ and re-paste.
 | Gap analysis: differences; what must change | 03 |
 | Which existing tickets cover the work; missing tickets | 03a |
 | Risks/constraints | 05 |
-| Recommendation: sequence/phasing; effort | 07 (+ 08) |
+| Recommendation: sequence/phasing; effort | 07 (+ 08, 09) |
 | Summary to share | 00 |
 
 ## Placeholders to replace in Confluence
