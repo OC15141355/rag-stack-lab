@@ -1,0 +1,6 @@
+# image-refs-location: bad-bare-name fixture (applied to a copy of the template by tests/test_checks.py)
+description: a bare image name in a values file
+expect: fail
+ops:
+- file: platform/values/nim-operator/qa.yaml
+  write: "sidecar:\n  image: busybox:1.36\n"

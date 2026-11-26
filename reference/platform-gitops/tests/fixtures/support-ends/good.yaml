@@ -1,0 +1,6 @@
+# support-ends: good fixture (applied to a copy of the template by tests/test_checks.py)
+description: nothing ends within 90 days of 2026-06-01
+expect: pass
+today: '2026-06-01'
+absent: support ends 20
+ops: []

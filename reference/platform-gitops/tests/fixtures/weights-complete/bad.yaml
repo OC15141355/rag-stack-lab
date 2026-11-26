@@ -1,0 +1,10 @@
+# weights-complete: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: weights without manifest_sha256
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - '          manifest_sha256: 95230825ab088a1d60c9236c7ddf4ded6c74be1b500e66bcd5f3a5f77b69287f
+
+    '
+  - ''

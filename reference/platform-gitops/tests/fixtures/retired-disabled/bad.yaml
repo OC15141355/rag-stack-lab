@@ -1,0 +1,10 @@
+# retired-disabled: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: retired but still enabled in dev and qa
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  set:
+  - services
+  - 2
+  - retired
+  value: true

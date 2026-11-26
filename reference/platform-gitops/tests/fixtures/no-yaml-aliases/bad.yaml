@@ -1,0 +1,10 @@
+# no-yaml-aliases: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: an anchor + alias in services.yaml (one edit would silently change several blocks)
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  append: 'x-shared: &shared {rpm: 30}
+
+    x-copy: *shared
+
+    '

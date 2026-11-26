@@ -1,0 +1,8 @@
+# digests-only: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: catalogue image pinned by tag only
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - 2.0.0@sha256:ec1d31827aefd31011f35fe1bfc610aaa0ad07791cb25b98f8205051e5f89c69
+  - 2.0.0

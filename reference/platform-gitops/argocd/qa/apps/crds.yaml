@@ -1,0 +1,30 @@
+# Child of qa-root. Watches only clusters/qa/00-crds. QA: MANUAL sync inside the sync window, no wave: sync the children by hand in order
+# crds -> platform -> secrets -> weights -> (transfer, bootstrap/) -> weights-verify -> services -> gateway (README 'Syncing QA and PROD').
+# Prune is a manual, reviewed sync (Prune checkbox) after the PR that removed the objects merged.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: qa-crds
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: clusters/qa/00-crds
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

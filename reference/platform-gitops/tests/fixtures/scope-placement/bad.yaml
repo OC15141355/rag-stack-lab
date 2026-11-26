@@ -1,0 +1,13 @@
+# scope-placement: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: a ClusterRole in 30-services
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  append_doc:
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: sneaky
+      labels:
+        managed-by: platform-gitops
+    rules: []

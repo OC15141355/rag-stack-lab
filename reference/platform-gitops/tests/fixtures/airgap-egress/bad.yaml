@@ -1,0 +1,18 @@
+# airgap-egress: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: public egress in air-gapped QA
+expect: fail
+ops:
+- file: clusters/qa/30-services/chat-glm.yaml
+  doc:
+    kind: NetworkPolicy
+    name: chat-glm
+  set:
+  - spec
+  - egress
+  - 1
+  value:
+    to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - port: 443

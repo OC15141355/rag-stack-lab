@@ -1,0 +1,38 @@
+# Bifrost gateway. Source for clusters/<env>/40-gateway/bifrost.yaml. The image is a catalogue placeholder
+# (${image:gateway/bifrost}): render.py writes the digest-pinned ref from catalogue/platform.yaml.
+# render.py stamps two content-hash annotations on the pod template (never a git revision):
+#   platform-gitops/config-hash          the rendered config.json + models.json
+#   platform-gitops/secret-hash.<name>   the SOPS file behind each envFrom Secret (envFrom changes do not restart pods)
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: bifrost, namespace: gateway, labels: {app: bifrost}}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: bifrost}}
+  template:
+    metadata: {labels: {app: bifrost}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: bifrost
+          image: "${image:gateway/bifrost}"
+          # no container args: Bifrost reads /app/data/config.json (file-based config, source_of_truth config.json)
+          env:
+            - {name: APP_HOST, value: "0.0.0.0"}
+            - {name: APP_PORT, value: "8080"}
+            - {name: APP_DIR, value: /app/data}
+            - {name: LOG_LEVEL, value: info}
+          envFrom: [{secretRef: {name: bifrost-env}}]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 30, periodSeconds: 20}
+          resources: {requests: {cpu: 200m, memory: 512Mi}, limits: {memory: 1Gi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: data, mountPath: /app/data}
+            - {name: config, mountPath: /app/data/config.json, subPath: config.json, readOnly: true}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: bifrost-data}}
+        - {name: config, configMap: {name: bifrost-config}}

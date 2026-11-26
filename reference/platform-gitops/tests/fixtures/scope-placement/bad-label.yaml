@@ -1,0 +1,12 @@
+# scope-placement: bad-label fixture (applied to a copy of the template by tests/test_checks.py)
+description: an object without the managed-by label (invisible to orphan detection)
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  unset:
+  - metadata
+  - labels
+  - managed-by

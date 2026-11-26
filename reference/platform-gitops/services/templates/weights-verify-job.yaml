@@ -1,0 +1,30 @@
+# Verify Job, rendered to clusters/<env>/20-weights/verify/ and applied by its own step only after the transfer
+# finished (CI job verify:<env>, Argo app <env>-weights-verify). It checks the transferred files against the catalogue's manifest_sha256 and, only then, writes the
+# marker the NIMService init container requires. Re-run by deleting the Job; it never modifies the weights.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "verify-${pvc}"
+  namespace: models
+  labels: {app: weights-verify, platform-gitops/service: "${service_label}"}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 21600
+  template:
+    metadata: {labels: {app: weights-verify}}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 2000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: verify
+          image: "${verify_image}"
+          command: ["python3", "/tools/verify_weights.py", "--root", "/weights", "--manifest-sha256", "${manifest_sha256}"]
+          resources: {requests: {cpu: 500m, memory: 256Mi}, limits: {memory: 512Mi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: weights, mountPath: /weights}
+            - {name: tools, mountPath: /tools, readOnly: true}
+      volumes:
+        - {name: weights, persistentVolumeClaim: {claimName: "${pvc}"}}
+        - {name: tools, configMap: {name: weights-verify}}

@@ -1,0 +1,35 @@
+# Child of dev-root. Watches only secrets/dev. DEV: automated, wave 2.
+# Decrypted by the sops-kustomize Config Management Plugin (argocd/config/cmp-plugin.yaml, the lab-proven
+# path), with this cluster's age key only. Never pruned automatically.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-secrets
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: services
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: secrets/dev
+    plugin:
+      name: sops-kustomize
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -1,0 +1,10 @@
+# one-env-per-pr: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: a shared template change touches dev, qa and prod without the multi-env label
+expect: fail
+pair: true
+rerender: true
+ops:
+- file: platform/manifests/gateway/deployment.yaml
+  replace:
+  - 'LOG_LEVEL, value: info'
+  - 'LOG_LEVEL, value: warn'

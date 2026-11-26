@@ -1,0 +1,12 @@
+# airgap-auth: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: NGC authSecret on a NIMService in air-gapped PROD
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  set:
+  - spec
+  - authSecret
+  value: ngc-api-key

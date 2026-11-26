@@ -1,0 +1,23 @@
+# One LLM's flows. Ingress from the gateway AND from the NIM Operator: the operator decides NIMService Ready by
+# calling the NIM itself, so without its rule the pod is healthy but the NIMService stays NotReady forever (lab,
+# found live). Accepted risk: the operator can call the model. Egress only to the env's internal registry/mirror
+# ranges (catalogue/platform.yaml internal_ranges); DEV additionally reaches public 443 for NGC.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "${name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+spec:
+  podSelector: {matchLabels: {platform-gitops/service: "${service_label}"}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}
+          podSelector: {matchLabels: {app: bifrost}}
+      ports: [{port: 8000, protocol: TCP}]
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: nim-operator}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: k8s-nim-operator}}
+      ports: [{port: 8000, protocol: TCP}]
+  egress: "${egress_rules}"

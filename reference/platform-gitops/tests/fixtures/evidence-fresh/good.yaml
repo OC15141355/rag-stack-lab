@@ -1,0 +1,35 @@
+# evidence-fresh: good fixture (applied to a copy of the template by tests/test_checks.py)
+description: QA promoted to N+1 with a DEV pass carrying the service hash of exactly that block
+expect: pass
+pair: true
+ops:
+- file: catalogue/services.yaml
+  set:
+  - services
+  - 1
+  - envs
+  - qa
+  - image
+  value: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.2@sha256:7ebb10085202dc4f27dd4bb8b1fae52af548b6169cf4e0f06ae56c940f4e1cb8
+- file: catalogue/evidence/dev/chat-nemotron-super-2026-11-25.yaml
+  write: 'service: chat/nemotron-super
+
+    env: dev
+
+    result: pass
+
+    image_digest: sha256:7ebb10085202dc4f27dd4bb8b1fae52af548b6169cf4e0f06ae56c940f4e1cb8
+
+    profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
+
+    weights_revision: r2026-09
+
+    service_hash: sha256:48ec3b29d39c199cbc2bb235ec8edbc6140fd5029a6b2f7f0773f1ce39fca5c5
+
+    render_hash: sha256:1111111111111111111111111111111111111111111111111111111111111111
+
+    smoke: {passed: 6, failed: 0, skipped: 0}
+
+    recorded: 2026-11-25
+
+    '

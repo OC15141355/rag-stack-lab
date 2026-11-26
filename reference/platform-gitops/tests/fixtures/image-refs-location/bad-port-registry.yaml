@@ -1,0 +1,10 @@
+# image-refs-location: bad-port-registry fixture (applied to a copy of the template by tests/test_checks.py)
+description: a dotless registry with a port
+expect: fail
+ops:
+- file: platform/values/nim-operator/qa.yaml
+  write: '# pulled from registry:5000/nim/k8s-nim-operator:v3.1.4
+
+    {}
+
+    '

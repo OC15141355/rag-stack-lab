@@ -1,0 +1,14 @@
+# weights-delete-guard: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: removing a service from DEV drops its NIMCache and weights PVC, no label
+expect: fail
+pair: true
+rerender: true
+ops:
+- file: catalogue/services.yaml
+  set:
+  - services
+  - 1
+  - envs
+  - dev
+  - enabled
+  value: false

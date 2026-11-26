@@ -1,0 +1,17 @@
+# airgap-egress: bad-wide-range fixture (applied to a copy of the template by tests/test_checks.py)
+description: an ipBlock wider than the internal ranges (10.0.0.0/8)
+expect: fail
+ops:
+- file: clusters/qa/30-services/chat-glm.yaml
+  doc:
+    kind: NetworkPolicy
+    name: chat-glm
+  set:
+  - spec
+  - egress
+  - 0
+  - to
+  - 0
+  - ipBlock
+  - cidr
+  value: 10.0.0.0/8

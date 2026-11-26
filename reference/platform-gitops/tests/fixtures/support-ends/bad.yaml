@@ -1,0 +1,6 @@
+# support-ends: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: 'PB6 and the model-specific NIM end in January 2027: a WARNING, never a failure'
+expect: warn
+today: '2026-11-26'
+match: 'chat/nemotron-super: support ends 2027-01-31'
+ops: []

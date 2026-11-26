@@ -1,0 +1,14 @@
+# crd-schema: bad-type fixture (applied to a copy of the template by tests/test_checks.py)
+description: NIMService initContainer image given as a string (the CRD wants {repository, tag})
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  set:
+  - spec
+  - initContainers
+  - 0
+  - image
+  value: python:3.12

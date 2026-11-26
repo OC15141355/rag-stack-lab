@@ -1,0 +1,8 @@
+# render-check: bad-catalogue-not-rendered fixture (applied to a copy of the template by tests/test_checks.py)
+description: catalogue edited but clusters/ not regenerated
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - "        rpm: 60\n      qa:"
+  - "        rpm: 61\n      qa:"

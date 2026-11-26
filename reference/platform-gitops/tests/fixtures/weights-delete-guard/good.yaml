@@ -1,0 +1,16 @@
+# weights-delete-guard: good fixture (applied to a copy of the template by tests/test_checks.py)
+description: removing a service from DEV with the delete-weights label
+expect: pass
+pair: true
+rerender: true
+labels:
+- delete-weights
+ops:
+- file: catalogue/services.yaml
+  set:
+  - services
+  - 1
+  - envs
+  - dev
+  - enabled
+  value: false

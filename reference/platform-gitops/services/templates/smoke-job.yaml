@@ -1,0 +1,47 @@
+# Post-deploy smoke for the gateway (tools/smoke.py): chat, stream, tools, auth-negative, limit-429 (message
+# marker), per model in models.json. Argo runs it PostSync; the CI services job runs it after apply.
+# Named by the render hash so a changed deployment gets a new Job (Jobs are immutable) and an unchanged one is
+# not re-run. SYNC_REVISION is that render hash: the report is tied to exactly what was rendered.
+# activeDeadlineSeconds is sized from the slowest model's measured cold start (catalogue cold_start_seconds).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "smoke-${render_hash_short}"
+  namespace: gateway
+  labels: {app: smoke}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 604800   # completed smoke Jobs clean themselves up after 7 days (drift ignores finished Jobs)
+  activeDeadlineSeconds: "${smoke_deadline}"
+  template:
+    metadata: {labels: {app: smoke}}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: smoke
+          image: "${smoke_image}"
+          command: ["python3", "/smoke/smoke.py", "--base-url", "http://bifrost/v1",
+                    "--models-file", "/catalogue/models.json", "--header-env", "x-bf-vk=BIFROST_VK",
+                    "--expect-auth", "virtual key", "--limit-burst", "4",
+                    "--limit-header-env", "x-bf-vk=BIFROST_VK_PROBE", "--expect-limit", "rate limit violated for vk",
+                    "--require-negative-checks", "--require-revision", "--max-ttft", "90",
+                    "--max-tokens", "1024", "--json-report", "/tmp/report.json"]
+          env:
+            - name: BIFROST_VK
+              valueFrom: {secretKeyRef: {name: bifrost-env, key: BIFROST_VK}}
+            - name: BIFROST_VK_PROBE
+              valueFrom: {secretKeyRef: {name: bifrost-env, key: BIFROST_VK_PROBE}}
+            - {name: SYNC_REVISION, value: "${render_hash}"}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: script, mountPath: /smoke}
+            - {name: catalogue, mountPath: /catalogue}
+      volumes:
+        - {name: script, configMap: {name: smoke-script}}
+        - {name: catalogue, configMap: {name: bifrost-config}}

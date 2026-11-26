@@ -1,0 +1,51 @@
+# Merged into argocd-cm by bootstrap/ when Argo CD is installed (migration step 4). One Argo per cluster.
+# Health checks:
+#   argoproj.io/Application   app-of-apps waves wait for each child app to be Healthy (not built in since Argo 1.8)
+#   apps.nvidia.com/NIMCache   Ready -> Healthy, Failed -> Degraded, anything else Progressing
+#   apps.nvidia.com/NIMService Ready -> Healthy; NotReady with replicas 0 = deliberately scaled to zero -> Healthy (lab)
+#   nvidia.com/ClusterPolicy   ready -> Healthy, notReady -> Progressing, ignored (a second ClusterPolicy) -> Degraded
+# Tested with Argo CD's own Lua engine on fixtures: scripts/test-reference-health.sh (CI).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  application.resourceTrackingMethod: annotation
+  exec.enabled: "false"
+  resource.customizations.health.argoproj.io_Application: |
+    hs = {}
+    hs.status = "Progressing"
+    hs.message = ""
+    if obj.status ~= nil and obj.status.health ~= nil then
+      hs.status = obj.status.health.status
+      if obj.status.health.message ~= nil then hs.message = obj.status.health.message end
+    end
+    return hs
+  resource.customizations.health.apps.nvidia.com_NIMCache: |
+    hs = {}
+    local st = nil
+    if obj.status ~= nil then st = obj.status.state end
+    if st == "Ready" then hs.status = "Healthy"; hs.message = "cache ready"; return hs end
+    if st == "Failed" then hs.status = "Degraded"; hs.message = "NIMCache failed"; return hs end
+    hs.status = "Progressing"; hs.message = "waiting for NIMCache (state: " .. tostring(st) .. ")"
+    return hs
+  resource.customizations.health.apps.nvidia.com_NIMService: |
+    hs = {}
+    local st = nil
+    if obj.status ~= nil then st = obj.status.state end
+    local replicas = nil
+    if obj.spec ~= nil then replicas = obj.spec.replicas end
+    if st == "Ready" then hs.status = "Healthy"; hs.message = "Ready"; return hs end
+    if st == "Failed" then hs.status = "Degraded"; hs.message = "NIMService failed"; return hs end
+    if st == "NotReady" and replicas == 0 then hs.status = "Healthy"; hs.message = "scaled to zero"; return hs end
+    hs.status = "Progressing"; hs.message = "waiting for NIMService (state: " .. tostring(st) .. ")"
+    return hs
+  resource.customizations.health.nvidia.com_ClusterPolicy: |
+    hs = {}
+    local st = nil
+    if obj.status ~= nil then st = obj.status.state end
+    if st == "ready" then hs.status = "Healthy"; hs.message = "all operands ready"; return hs end
+    if st == "ignored" then hs.status = "Degraded"; hs.message = "ClusterPolicy ignored (another one exists)"; return hs end
+    hs.status = "Progressing"; hs.message = "GPU operands not ready (state: " .. tostring(st) .. ")"
+    return hs

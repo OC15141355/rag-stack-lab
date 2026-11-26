@@ -1,0 +1,9 @@
+# NIM Operator values shared by every environment. NO image references here (catalogue/platform.yaml).
+# CRDs are NOT rendered from this component: nim-operator-crds owns them (00-crds, applied first).
+operator:
+  replicas: 1
+  upgradeCRD: false               # Helm hooks are not run; CRD upgrades are the explicit 00-crds step
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  admissionController: {enabled: false}

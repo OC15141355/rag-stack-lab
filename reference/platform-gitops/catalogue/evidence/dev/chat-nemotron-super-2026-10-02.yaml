@@ -1,0 +1,11 @@
+# EXAMPLE evidence record (render_hash fabricated; service_hash computed from this template). Version N (1.15.1), now in QA and PROD.
+service: chat/nemotron-super
+env: dev
+result: pass
+image_digest: sha256:d831a25fd0b23b26b30568fd2f51db4f03b85ccd66617dcf1a3741aeaa7588c9
+profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
+weights_revision: r2026-09
+service_hash: sha256:da77c863bee7340fb542174a75f7bc17aa61be09eb974642ca713b0eb0213eb5   # render.py --service-hash <env> <service>: checked by CI on promotion
+render_hash: sha256:b9b8772a68e35b89acc2bfbdd5291d15869e49d51c4cce57c69072f6fe24a158
+smoke: {passed: 6, failed: 0, skipped: 0}
+recorded: 2026-10-02

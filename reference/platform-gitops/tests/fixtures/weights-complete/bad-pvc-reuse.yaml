@@ -1,0 +1,13 @@
+# weights-complete: bad-pvc-reuse fixture (applied to a copy of the template by tests/test_checks.py)
+description: a new weights revision written into the old revision's PVC
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  set:
+  - services
+  - 0
+  - envs
+  - prod
+  - weights
+  - revision
+  value: r2026-12

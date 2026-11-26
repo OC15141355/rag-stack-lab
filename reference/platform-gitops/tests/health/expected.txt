@@ -1,0 +1,13 @@
+nimcache-ready.yaml Healthy
+nimcache-inprogress.yaml Progressing
+nimcache-failed.yaml Degraded
+nimservice-ready.yaml Healthy
+nimservice-scaled-zero.yaml Healthy
+nimservice-notready.yaml Progressing
+nimservice-failed.yaml Degraded
+clusterpolicy-ready.yaml Healthy
+clusterpolicy-notready.yaml Progressing
+clusterpolicy-ignored.yaml Degraded
+application-healthy.yaml Healthy
+application-degraded.yaml Degraded
+application-new.yaml Progressing

@@ -1,0 +1,4 @@
+apiVersion: nvidia.com/v1
+kind: ClusterPolicy
+metadata: {name: cluster-policy-2}
+status: {state: ignored}

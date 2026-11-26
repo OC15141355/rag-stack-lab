@@ -1,0 +1,7 @@
+# catalogue-schema: bad-evidence fixture (applied to a copy of the template by tests/test_checks.py)
+description: evidence record without its render hash
+expect: fail
+ops:
+- file: catalogue/evidence/qa/chat-glm-2026-11-21.yaml
+  unset:
+  - render_hash

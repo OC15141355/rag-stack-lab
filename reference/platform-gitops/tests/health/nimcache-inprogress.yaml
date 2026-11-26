@@ -1,0 +1,4 @@
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMCache
+metadata: {name: glm-r2026-11, namespace: models}
+status: {state: InProgress}

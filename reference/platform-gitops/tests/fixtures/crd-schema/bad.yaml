@@ -1,0 +1,13 @@
+# crd-schema: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: unknown field in a NIMService (readonly instead of readOnly) - the API server would prune it
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  set:
+  - spec
+  - storage
+  - readonly
+  value: false

@@ -1,0 +1,45 @@
+# Default-deny (ingress AND egress) in the two service namespaces, plus DNS. Every other flow is a named allow:
+# per service (services/templates/networkpolicy-*.yaml) and for the gateway (gateway/networkpolicy.yaml).
+# The operator namespaces are not default-denied: operators need the API server, which NetworkPolicy cannot name.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: models}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: models}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: gateway}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: gateway}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+---
+# GPU budget per environment (catalogue/platform.yaml environments.<env>.gpu_quota). A retired service that still
+# holds GPUs shows up here as well as in the orphan report.
+apiVersion: v1
+kind: ResourceQuota
+metadata: {name: gpu-budget, namespace: models}
+spec:
+  hard:
+    requests.nvidia.com/gpu: "${gpu_quota}"

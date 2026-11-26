@@ -1,0 +1,189 @@
+{
+ "apiVersion": "v1",
+ "kind": "List",
+ "items": [
+  {
+   "apiVersion": "apps.nvidia.com/v1alpha1",
+   "kind": "NIMService",
+   "metadata": {
+    "name": "chat-glm",
+    "namespace": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "apps.nvidia.com/v1alpha1",
+   "kind": "NIMCache",
+   "metadata": {
+    "name": "glm-r2026-11",
+    "namespace": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "PersistentVolumeClaim",
+   "metadata": {
+    "name": "glm-r2026-11",
+    "namespace": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "networking.k8s.io/v1",
+   "kind": "NetworkPolicy",
+   "metadata": {
+    "name": "chat-glm",
+    "namespace": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "apps/v1",
+   "kind": "Deployment",
+   "metadata": {
+    "name": "chat-glm",
+    "namespace": "models",
+    "labels": {
+     "app.kubernetes.io/component": "nim-llm"
+    },
+    "ownerReferences": [
+     {
+      "apiVersion": "apps.nvidia.com/v1alpha1",
+      "kind": "NIMService",
+      "name": "chat-glm",
+      "uid": "00000000-0000-0000-0000-000000000001"
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Service",
+   "metadata": {
+    "name": "chat-glm",
+    "namespace": "models",
+    "ownerReferences": [
+     {
+      "apiVersion": "apps.nvidia.com/v1alpha1",
+      "kind": "NIMService",
+      "name": "chat-glm",
+      "uid": "00000000-0000-0000-0000-000000000001"
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Pod",
+   "metadata": {
+    "name": "chat-glm-7d9f-abcde",
+    "namespace": "models"
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "ConfigMap",
+   "metadata": {
+    "name": "kube-root-ca.crt",
+    "namespace": "models"
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "ServiceAccount",
+   "metadata": {
+    "name": "default",
+    "namespace": "models"
+   }
+  },
+  {
+   "apiVersion": "apps/v1",
+   "kind": "Deployment",
+   "metadata": {
+    "name": "bifrost",
+    "namespace": "gateway",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "ConfigMap",
+   "metadata": {
+    "name": "bifrost-config",
+    "namespace": "gateway",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Secret",
+   "metadata": {
+    "name": "bifrost-env",
+    "namespace": "gateway"
+   },
+   "type": "Opaque"
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Secret",
+   "metadata": {
+    "name": "default-token-x",
+    "namespace": "gateway"
+   },
+   "type": "kubernetes.io/service-account-token"
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "ConfigMap",
+   "metadata": {
+    "name": "coredns",
+    "namespace": "kube-system"
+   }
+  },
+  {
+   "apiVersion": "v1",
+   "kind": "Namespace",
+   "metadata": {
+    "name": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "apps.nvidia.com/v1alpha1",
+   "kind": "NIMService",
+   "metadata": {
+    "name": "chat-retired-model",
+    "namespace": "models",
+    "labels": {
+     "managed-by": "platform-gitops"
+    }
+   }
+  },
+  {
+   "apiVersion": "apps/v1",
+   "kind": "Deployment",
+   "metadata": {
+    "name": "debug-shell",
+    "namespace": "models",
+    "labels": {
+     "app": "debug"
+    }
+   }
+  }
+ ]
+}

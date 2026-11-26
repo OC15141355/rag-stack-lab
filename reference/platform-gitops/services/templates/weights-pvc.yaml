@@ -1,0 +1,18 @@
+# One PVC per (service, weights revision). Flow: PVC (this file) -> tracked transfer (bootstrap/) -> verify Job
+# (weights-verify-job.yaml, rendered to 20-weights/verify/, applied only AFTER the transfer) -> service.
+# Never overwritten: a new revision is a new PVC. The StorageClass has
+# reclaimPolicy Retain (platform/manifests/storage.yaml), and Argo never prunes or deletes it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "${pvc}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}", platform-gitops/weights-revision: "${revision}"}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    platform-gitops/source-uri: "${source_uri}"
+    platform-gitops/manifest-sha256: "${manifest_sha256}"
+spec:
+  accessModes: ["${access_mode}"]
+  storageClassName: "${weights_class}"
+  resources: {requests: {storage: "${size}"}}

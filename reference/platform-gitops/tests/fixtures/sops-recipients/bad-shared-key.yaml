@@ -1,0 +1,8 @@
+# sops-recipients: bad-shared-key fixture (applied to a copy of the template by tests/test_checks.py)
+description: QA and PROD share an age recipient
+expect: fail
+ops:
+- file: .sops.yaml
+  replace:
+  - 'age: age1z77zvsjdkcjspd2mwvfm2elw9qe5jk0f467l2r4c2khhh57ydddqryymep'
+  - 'age: age1kry53slvdj6r54sf7rrs7yve048clmezj9nv8tzr8gzqnvdjw3qq6dk5kt'

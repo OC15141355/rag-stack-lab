@@ -1,0 +1,8 @@
+# evidence: bad-failed-run fixture (applied to a copy of the template by tests/test_checks.py)
+description: the only QA record is a failed run
+expect: fail
+ops:
+- file: catalogue/evidence/qa/chat-glm-2026-11-21.yaml
+  set:
+  - result
+  value: fail

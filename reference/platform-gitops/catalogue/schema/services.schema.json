@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "services": {
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "nim-llm"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "served_model",
+                "limits"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "deployment"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "ports",
+                "health_path"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "support_ends": {
+                  "type": "null"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "review_by"
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "capabilities": {
+            "items": {
+              "enum": [
+                "chat",
+                "stream",
+                "tools",
+                "asr",
+                "embed"
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "cold_start_seconds": {
+            "minimum": 60,
+            "type": "integer"
+          },
+          "deprecated": {
+            "additionalProperties": false,
+            "properties": {
+              "after": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "replacement": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "after",
+              "replacement"
+            ],
+            "type": "object"
+          },
+          "envs": {
+            "additionalProperties": false,
+            "properties": {
+              "dev": {
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                },
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "gpus": {
+                    "maximum": 64,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "image": {
+                    "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "profile_id": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "replicas": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "rpm": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "weights": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "manifest_sha256": {
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "pvc": {
+                        "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+                        "type": "string"
+                      },
+                      "revision": {
+                        "pattern": "^[a-z0-9][a-z0-9.-]*$",
+                        "type": "string"
+                      },
+                      "size": {
+                        "pattern": "^[0-9]+(Gi|Ti)$",
+                        "type": "string"
+                      },
+                      "source_uri": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source_uri",
+                      "revision",
+                      "manifest_sha256",
+                      "pvc",
+                      "size"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "then": {
+                  "required": [
+                    "image",
+                    "gpus"
+                  ]
+                },
+                "type": "object"
+              },
+              "prod": {
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                },
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "gpus": {
+                    "maximum": 64,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "image": {
+                    "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "profile_id": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "replicas": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "rpm": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "weights": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "manifest_sha256": {
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "pvc": {
+                        "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+                        "type": "string"
+                      },
+                      "revision": {
+                        "pattern": "^[a-z0-9][a-z0-9.-]*$",
+                        "type": "string"
+                      },
+                      "size": {
+                        "pattern": "^[0-9]+(Gi|Ti)$",
+                        "type": "string"
+                      },
+                      "source_uri": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source_uri",
+                      "revision",
+                      "manifest_sha256",
+                      "pvc",
+                      "size"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "then": {
+                  "required": [
+                    "image",
+                    "gpus"
+                  ]
+                },
+                "type": "object"
+              },
+              "qa": {
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                },
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "gpus": {
+                    "maximum": 64,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "image": {
+                    "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "profile_id": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "replicas": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "rpm": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "weights": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "manifest_sha256": {
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "pvc": {
+                        "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+                        "type": "string"
+                      },
+                      "revision": {
+                        "pattern": "^[a-z0-9][a-z0-9.-]*$",
+                        "type": "string"
+                      },
+                      "size": {
+                        "pattern": "^[0-9]+(Gi|Ti)$",
+                        "type": "string"
+                      },
+                      "source_uri": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source_uri",
+                      "revision",
+                      "manifest_sha256",
+                      "pvc",
+                      "size"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "then": {
+                  "required": [
+                    "image",
+                    "gpus"
+                  ]
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "health_path": {
+            "pattern": "^/",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[a-z0-9-]+/[a-z0-9.-]+$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "nim-llm",
+              "deployment"
+            ]
+          },
+          "limits": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "max_output": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "context",
+              "max_output"
+            ],
+            "type": "object"
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "ports": {
+            "additionalProperties": {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "required": [
+              "http"
+            ],
+            "type": "object"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_by": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string"
+          },
+          "served_model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "support_ends": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tool_parser": {
+            "pattern": "^[a-z0-9_]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "kind",
+          "capabilities",
+          "envs",
+          "deprecated",
+          "retired",
+          "support_ends",
+          "cold_start_seconds"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "services"
+  ],
+  "title": "catalogue/services.yaml (layer A)",
+  "type": "object"
+}

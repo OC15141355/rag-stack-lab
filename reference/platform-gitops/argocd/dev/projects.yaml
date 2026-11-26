@@ -1,0 +1,73 @@
+# HAND-APPLIED on the dev cluster's Argo CD. `default` is locked: an Application with no project deploys nothing.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: []
+  destinations: []
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+  - group: '*'
+    kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: 'Layer B: CRDs, operators, namespaces, policies, storage. The NIM Operator is managed from here only (its ClusterRole reads every
+    Secret).'
+  sourceRepos:
+  - https://gitlab.internal.example/platform/platform-gitops.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: gpu-operator
+  - server: https://kubernetes.default.svc
+    namespace: nim-operator
+  - server: https://kubernetes.default.svc
+    namespace: models
+  - server: https://kubernetes.default.svc
+    namespace: gateway
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: services
+  namespace: argocd
+spec:
+  description: 'Layer A: secrets, weights, models, gateway. Namespace-scoped only: no cluster resources, no RBAC.'
+  sourceRepos:
+  - https://gitlab.internal.example/platform/platform-gitops.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: models
+  - server: https://kubernetes.default.svc
+    namespace: gateway
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+  - group: rbac.authorization.k8s.io
+    kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: bootstrap
+  namespace: argocd
+spec:
+  description: Only the per-env app-of-apps and the hand-applied weights apps.
+  sourceRepos:
+  - https://gitlab.internal.example/platform/platform-gitops.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: argocd
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+  - group: argoproj.io
+    kind: Application

@@ -1,0 +1,15 @@
+# no-revision-annotations: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: a git revision annotation on the gateway pod template
+expect: fail
+ops:
+- file: clusters/prod/40-gateway/bifrost.yaml
+  doc:
+    kind: Deployment
+    name: bifrost
+  set:
+  - spec
+  - template
+  - metadata
+  - annotations
+  - platform-gitops/git-revision
+  value: 4f2a9c1

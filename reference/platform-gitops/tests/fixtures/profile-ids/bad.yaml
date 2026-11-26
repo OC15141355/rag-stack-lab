@@ -1,0 +1,8 @@
+# profile-ids: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: a versioned profile name instead of the 64-hex ID
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - 'profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846'
+  - 'profile_id: vllm-bf16-tp2-pp1'

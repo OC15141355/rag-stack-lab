@@ -1,0 +1,12 @@
+# one-env-per-pr: good-labelled fixture (applied to a copy of the template by tests/test_checks.py)
+description: a shared change with the multi-env label
+expect: pass
+pair: true
+rerender: true
+labels:
+- multi-env
+ops:
+- file: platform/manifests/gateway/deployment.yaml
+  replace:
+  - 'LOG_LEVEL, value: info'
+  - 'LOG_LEVEL, value: warn'

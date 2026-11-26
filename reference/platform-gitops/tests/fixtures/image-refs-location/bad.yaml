@@ -1,0 +1,6 @@
+# image-refs-location: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: an image repository in a values file
+expect: fail
+ops:
+- file: platform/values/nim-operator/dev.yaml
+  write: "operator:\n  image: {repository: nvcr.io/nvidia/cloud-native/k8s-nim-operator, tag: v3.1.4}\n"

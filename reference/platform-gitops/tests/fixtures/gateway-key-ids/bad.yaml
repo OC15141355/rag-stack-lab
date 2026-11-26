@@ -1,0 +1,19 @@
+# gateway-key-ids: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: empty key_ids (schema-valid; config v2 then denies every key)
+expect: fail
+ops:
+- file: clusters/prod/40-gateway/bifrost-config.yaml
+  doc:
+    kind: ConfigMap
+    name: bifrost-config
+  json:
+  - data
+  - config.json
+  set:
+  - governance
+  - virtual_keys
+  - 0
+  - provider_configs
+  - 0
+  - key_ids
+  value: []

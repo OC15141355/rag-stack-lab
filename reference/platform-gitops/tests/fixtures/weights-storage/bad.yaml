@@ -1,0 +1,14 @@
+# weights-storage: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: NIMCache creates its own PVC
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMCache
+    name: glm-r2026-11
+  set:
+  - spec
+  - storage
+  - pvc
+  - create
+  value: true
