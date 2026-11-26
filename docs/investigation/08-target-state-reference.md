@@ -1,5 +1,14 @@
 # Target-state reference: NIM LLMs with the NIM Operator
 
+> **Superseded (2026-11-26)** by [`reference/platform-gitops/`](../../reference/platform-gitops/) and the design [`2026-11-26-platform-gitops-lifecycle-design.md`](../superpowers/specs/2026-11-26-platform-gitops-lifecycle-design.md). Kept for history.
+>
+> **Corrections proven live on an A100 (Phase B, 2026-11-26)**, which this page gets wrong:
+> 1. `spec.storage.readOnly: true` stops NIM 2.1.7 from starting ("cache directory not accessible"). Mount the cache read-write.
+> 2. The gateway-only NetworkPolicy blocks the NIM Operator's own readiness call: the NIMService stays NotReady with a healthy pod. Also admit the operator's namespace to port 8000.
+> 3. Tool calling needs `NIM_PASSTHROUGH_ARGS="--enable-auto-tool-choice --tool-call-parser <parser>"`.
+> 4. In an air gap the egress policy must allow the internal registry/mirror ranges, and `authSecret` should be omitted.
+> See [Phase B findings](../raglab-phase-b-findings.md).
+
 Date: 2026-11-19. This is a reference implementation, not a deployed system. Nothing here was applied to a cluster. The examples build with `kubectl kustomize` (client-side, no cluster), and the rendered output of all three overlays validates against the operator's own CRD schemas with unknown fields rejected (a throwaway check; zero errors, and a deliberately misspelt field was caught). Background: [03-nvidia-recommended-deployment](03-nvidia-recommended-deployment.md), [05-gap-analysis](05-gap-analysis.md), [23-nemo-nim-operator-deployment](../prereading/23-nemo-nim-operator-deployment.md).
 
 **Source tag used: `NVIDIA/k8s-nim-operator` v3.1.4** (latest release on 2026-11-19; v3.1.3 precedes it). Every field in the examples exists in `api/apps/v1alpha1/*_types.go` and in the CRDs under `config/crd/bases/` at that tag. Links below are pinned to the tag.
@@ -54,7 +63,7 @@ All image repositories, tags and profile ids in the examples are placeholders (s
 |---|---|
 | `spec.image.{repository,tag,pullPolicy,pullSecrets}` | Harbor path, pinned tag, `IfNotPresent` ([Image, common_types.go L219-L224](https://github.com/NVIDIA/k8s-nim-operator/blob/v3.1.4/api/apps/v1alpha1/common_types.go#L219-L224)). `repository` and `tag` are required. |
 | `spec.storage.nimCache.{name,profile}` | Links to the cache and pins the profile ([NIMCacheVolSpec L197-L200](https://github.com/NVIDIA/k8s-nim-operator/blob/v3.1.4/api/apps/v1alpha1/nimservice_types.go#L197-L200)). The controller turns it into `NIM_MODEL_PROFILE` ([nimservice.go L406-L441](https://github.com/NVIDIA/k8s-nim-operator/blob/v3.1.4/internal/controller/platform/standalone/nimservice.go#L406-L441)). |
-| `spec.storage.readOnly` | The serving pod must not write to the cache. |
+| `spec.storage.readOnly` | ~~The serving pod must not write to the cache.~~ **Wrong: NIM 2.1.7 refuses a read-only cache (Phase B). Use `false`.** |
 | `spec.storage.sharedMemorySizeLimit` | Size of the `/dev/shm` emptyDir ([L261](https://github.com/NVIDIA/k8s-nim-operator/blob/v3.1.4/api/apps/v1alpha1/nimservice_types.go#L261)). 64Gi and 32Gi are guesses. |
 | `spec.resources` | `nvidia.com/gpu: 8` set explicitly. If left out and the cache is an optimized NIM, the operator reads TP from the cached profile and assigns that many GPUs ([addGPUResources L1326](https://github.com/NVIDIA/k8s-nim-operator/blob/v3.1.4/internal/controller/platform/standalone/nimservice.go#L1326)). Setting it explicitly makes the manifest self-describing, but the number must match the profile. |
 | `spec.nodeSelector`, `spec.tolerations` | Pin to H200 nodes (`nvidia.com/gpu.product`, a GPU Feature Discovery label; check the exact value) and tolerate the GPU taint. |

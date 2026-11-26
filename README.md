@@ -1,8 +1,21 @@
 # rag-stack-lab
 
-A personal lab for learning an NVIDIA-style enterprise chat and RAG stack on
-Kubernetes, end to end: what each part is, why it is there, how it is run, and
-the commands and references needed to work with it.
+A personal lab for learning, and proving, an NVIDIA-style enterprise chat and RAG platform on Kubernetes: what each
+part is, how it is deployed and run as a lifecycle with GitOps, and the evidence from actually running it.
+
+## Repo map: what is where
+
+| Area | What it is | Start with |
+|---|---|---|
+| **Platform GitOps reference** | The target structure for running NVIDIA AI as a platform + service lifecycle (one `main`, folders per env, catalogue, rendered manifests, gates). A working template, tested in CI. | [`reference/platform-gitops/`](reference/platform-gitops/) · design [`specs/2026-11-26-platform-gitops-lifecycle-design.md`](docs/superpowers/specs/2026-11-26-platform-gitops-lifecycle-design.md) |
+| **Understanding (owner notes)** | The why behind the design, in plain terms | [`docs/notes/understanding-gitops-ai-platform-lifecycle.md`](docs/notes/understanding-gitops-ai-platform-lifecycle.md) |
+| **Ticket deliverable** | Confluence page set for the Project investigation (NeMo operator approach) | [`docs/project-investigation/confluence/`](docs/project-investigation/confluence/README.md) |
+| **Lab (working proof)** | Phase A: home-lab k3s + Argo + Bifrost + hosted NIMs. Phase B: rented A100 serving a real NIM. | [`lab/README.md`](lab/README.md), findings [Phase A](docs/raglab-phase-a-findings.md), [Phase B](docs/raglab-phase-b-findings.md), GPU runbook [`lab/gpu/README.md`](lab/gpu/README.md) |
+| **Research and pre-reading** | Vendor research, the stack explained component by component | [`docs/research/`](docs/research/), [`docs/00-map/`](docs/00-map/README.md), [`docs/prereading/`](docs/prereading/) |
+| **Investigation kit** | Generic templates used to build the ticket pages | [`docs/investigation/`](docs/investigation/README.md) |
+| Superseded | Early sketches, kept for history | [`examples/`](examples/README.md) (replaced by `reference/`) |
+
+Design history (specs, plans, review triage) lives in [`docs/superpowers/`](docs/superpowers/).
 
 ## Working on the Project ticket? Start here
 
@@ -21,8 +34,8 @@ approach (steps, prerequisites, gaps, risks, effort across DEV/QA/PROD; map to t
 | What Entity Store / Data Store really do vs the tickets | [investigation/04](docs/investigation/04-nemo-entity-and-data-store.md) |
 | Deploying the NIM Operator and NeMo CRDs, step by step | [prereading/23](docs/prereading/23-nemo-nim-operator-deployment.md) |
 | NeMo Helix (successor) | [prereading/28](docs/prereading/28-nemo-helix.md) |
-| Target-state manifests (NIMService/NIMCache, overlays, Argo health, NetworkPolicy) | [investigation/08](docs/investigation/08-target-state-reference.md) + [examples/nim-operator](examples/nim-operator/), [examples/argocd](examples/argocd/) |
-| Model catalogue + promotion pipeline (metadata and promotion tickets) | [investigation/09](docs/investigation/09-model-catalogue-and-promotion.md) + [examples/model-catalogue](examples/model-catalogue/), [examples/gitlab-ci](examples/gitlab-ci/) |
+| Target-state structure and manifests | **[reference/platform-gitops](reference/platform-gitops/)** (supersedes investigation/08 + examples/) |
+| Model catalogue + promotion pipeline (metadata and promotion tickets) | [reference/platform-gitops](reference/platform-gitops/) catalogue + evidence rule; background [investigation/09](docs/investigation/09-model-catalogue-and-promotion.md) |
 | Smoke tests (promotion gate) | [investigation/10](docs/investigation/10-smoke-tests.md) + [examples/smoke](examples/smoke/) |
 | Cutover / rollback per env | [investigation/12](docs/investigation/12-cutover-runbook-template.md) |
 | Questions for the NVIDIA account team | [investigation/13](docs/investigation/13-questions-for-nvidia.md) |
@@ -49,9 +62,8 @@ It's for the wider stack.
    order. Each document ends with "Check yourself" questions.
 3. Note what clicked and what is still fuzzy in [LEARNING.md](LEARNING.md).
 
-Hands-on modules (lesson, runbook, checks, references) are added under
-`modules/` as they are built and validated. The plan is in
-[the design spec](docs/superpowers/specs/2026-11-13-rag-stack-lab-design.md).
+The original learning-lab plan is in
+[the design spec](docs/superpowers/specs/2026-11-13-rag-stack-lab-design.md); hands-on work became `lab/`.
 
 ## Investigation kit
 

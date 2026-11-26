@@ -20,6 +20,14 @@ limits; gated promotion) with components NVIDIA still supports, plus the automat
 > (operator CRs via Argo CD, Bifrost, catalogue, promotion and smoke gates); see `docs/raglab-phase-a-findings.md`.
 > Effort estimates are unchanged. The lab build took about 2 days of agent-assisted work, which supports the phase sizes.
 
+> **[MACRO: Info panel]** Target structure (2026-11-26): Option 1 as a lifecycle, not per-model deployments. One
+> `main` with a folder per environment (no environment branches); a catalogue listing what runs where per environment
+> (platform components and models, with NVIDIA support dates); per-environment manifests generated from it and reviewed
+> as the exact change; promotion DEV → QA → PROD by merge request with recorded smoke evidence; Ansible reduced to
+> cluster bootstrap. It is adoptable in steps, each useful alone, starting before Argo CD or Bifrost exist. Two NVIDIA
+> dates make this time-sensitive: Production Branch 6 and the model-specific Llama/Nemotron LLM NIMs reach end of
+> support in January 2027. Reference design and working template: `reference/platform-gitops/` in the lab repo.
+
 **What would change it:** NVIDIA confirms a supported, near-term path for the NeMo layer; Helix goes GA with a
 migration guide; a fine-tuning/evaluation workflow is approved (then trial Helix).
 
