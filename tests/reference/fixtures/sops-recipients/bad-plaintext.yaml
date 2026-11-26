@@ -1,0 +1,14 @@
+# sops-recipients: bad-plaintext fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: a plaintext Secret under secrets/
+expect: fail
+ops:
+- file: secrets/dev/extra.sops.yaml
+  write: 'apiVersion: v1
+
+    kind: Secret
+
+    metadata: {name: extra}
+
+    stringData: {K: plain}
+
+    '

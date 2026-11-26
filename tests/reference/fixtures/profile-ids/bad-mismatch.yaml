@@ -1,0 +1,16 @@
+# profile-ids: bad-mismatch fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: NIMService and NIMCache pin different profiles
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMCache
+    name: glm-r2026-11
+  set:
+  - spec
+  - source
+  - ngc
+  - model
+  - profiles
+  - 0
+  value: '0000000000000000000000000000000000000000000000000000000000000000'

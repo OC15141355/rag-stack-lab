@@ -1,0 +1,11 @@
+# weights-storage: bad-reclaim fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: weights StorageClass deletes the volume with the claim
+expect: fail
+ops:
+- file: clusters/prod/10-platform/storage.yaml
+  doc:
+    kind: StorageClass
+    name: weights-retain
+  set:
+  - reclaimPolicy
+  value: Delete

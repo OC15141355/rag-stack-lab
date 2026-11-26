@@ -1,0 +1,18 @@
+# gateway-schema: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: unknown field in a Bifrost virtual key
+expect: fail
+ops:
+- file: clusters/prod/40-gateway/bifrost-config.yaml
+  doc:
+    kind: ConfigMap
+    name: bifrost-config
+  json:
+  - data
+  - config.json
+  set:
+  - governance
+  - virtual_keys
+  - 0
+  - keyids
+  value:
+  - '*'

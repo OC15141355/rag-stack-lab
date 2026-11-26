@@ -1,0 +1,13 @@
+# no-revision-annotations: bad-nimservice fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: a commit label on NIMService pods
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  set:
+  - spec
+  - labels
+  - commit
+  value: 4f2a9c1

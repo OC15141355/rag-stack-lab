@@ -1,0 +1,6 @@
+# evidence: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: PROD runs a triple with no recorded QA pass
+expect: fail
+ops:
+- file: catalogue/evidence/qa/chat-nemotron-super-2026-10-09.yaml
+  delete: true

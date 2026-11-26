@@ -1,0 +1,8 @@
+# evidence: bad-qa fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: QA promoted to N+1 without a DEV pass for N+1
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - 1.15.1@sha256:d831a25fd0b23b26b30568fd2f51db4f03b85ccd66617dcf1a3741aeaa7588c9
+  - 1.15.2@sha256:7ebb10085202dc4f27dd4bb8b1fae52af548b6169cf4e0f06ae56c940f4e1cb8

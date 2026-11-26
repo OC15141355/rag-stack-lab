@@ -1,0 +1,12 @@
+# nim-ingress-rules: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: NetworkPolicy admits the gateway but not the NIM Operator
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NetworkPolicy
+    name: chat-glm
+  unset:
+  - spec
+  - ingress
+  - 1

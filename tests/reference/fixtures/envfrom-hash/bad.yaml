@@ -1,0 +1,14 @@
+# envfrom-hash: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: envFrom Secret without its hash annotation (Secret changes would not restart the pod)
+expect: fail
+ops:
+- file: clusters/prod/40-gateway/bifrost.yaml
+  doc:
+    kind: Deployment
+    name: bifrost
+  unset:
+  - spec
+  - template
+  - metadata
+  - annotations
+  - platform-gitops/secret-hash.bifrost-env

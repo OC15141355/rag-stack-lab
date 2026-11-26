@@ -1,0 +1,10 @@
+# image-refs-location: bad-doc fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: an image ref in prose
+expect: fail
+ops:
+- file: bootstrap/README.md
+  append: '
+
+    Pull nvcr.io/nim/meta/llama-3.1-8b-instruct:2.1.7 first.
+
+    '

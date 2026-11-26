@@ -1,0 +1,16 @@
+# digests-only: bad-rendered fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: a rendered container image by tag
+expect: fail
+ops:
+- file: clusters/prod/40-gateway/bifrost.yaml
+  doc:
+    kind: Deployment
+    name: bifrost
+  set:
+  - spec
+  - template
+  - spec
+  - containers
+  - 0
+  - image
+  value: registry.internal.example/maximhq/bifrost:v2.6.0

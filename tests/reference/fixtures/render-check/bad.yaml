@@ -1,0 +1,17 @@
+# render-check: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: clusters/ hand-edited (a rate limit changed in the generated gateway config)
+expect: fail
+ops:
+- file: clusters/dev/40-gateway/bifrost-config.yaml
+  doc:
+    kind: ConfigMap
+    name: bifrost-config
+  json:
+  - data
+  - config.json
+  set:
+  - governance
+  - rate_limits
+  - 0
+  - request_max_limit
+  value: 999

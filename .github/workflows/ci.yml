@@ -1,6 +1,7 @@
 name: ci
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]   # labels gate reference/platform-gitops PR checks
   push:
     branches: [main, env/qa, env/prod]
 permissions:
@@ -33,7 +34,35 @@ jobs:
         run: uv run --with pyyaml python3 lab/catalogue/generate.py --check
       - name: smoke.py copy drift
         run: scripts/sync-smoke.sh && git diff --exit-code lab/envs/base/smoke.py
+      - name: helm v4.1.4 (checksum-verified; pinned in reference/platform-gitops/catalogue/platform.yaml)
+        run: |
+          cd "$RUNNER_TEMP"
+          tgz=helm-v4.1.4-linux-amd64.tar.gz
+          curl -fsSL -o "$tgz" "https://get.helm.sh/$tgz"
+          echo "70b2c30a19da4db264dfd68c8a3664e05093a361cefd89572ffb36f8abfa3d09  $tgz" | sha256sum -c -
+          tar -xzf "$tgz" linux-amd64/helm && sudo mv linux-amd64/helm /usr/local/bin/helm
+          helm version
+      - name: platform-gitops reference - smoke.py copy drift
+        run: scripts/sync-reference-smoke.sh && git diff --exit-code reference/platform-gitops/tools/smoke.py
+      - name: platform-gitops reference - render --check (offline, vendored charts only)
+        run: uv run --with pyyaml python3 reference/platform-gitops/tools/render.py --check
+      - name: platform-gitops reference - gates
+        run: uv run --with pyyaml --with jsonschema python3 reference/platform-gitops/tools/checks.py
+      - name: platform-gitops reference - PR gates (one env per PR, weights delete guard)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if git cat-file -e "origin/$BASE_REF:reference/platform-gitops/clusters" 2>/dev/null; then
+            git worktree add "$RUNNER_TEMP/base" "origin/$BASE_REF"
+            uv run --with pyyaml --with jsonschema python3 reference/platform-gitops/tools/checks.py \
+              --base "$RUNNER_TEMP/base/reference/platform-gitops" --labels "$LABELS" --only one-env-per-pr,weights-delete-guard
+          else
+            echo "base branch has no reference/platform-gitops yet: nothing to compare (PR gates not applicable)"
+          fi
       - name: unit tests
+        env: {REQUIRE_HELM: "1"}
         run: uv run --with pytest --with pyyaml --with jsonschema --with ansible-core pytest -q
       - name: argocd CLI v3.6.2 (checksum-verified)
         run: |
@@ -42,3 +71,5 @@ jobs:
           chmod +x /tmp/argocd && sudo mv /tmp/argocd /usr/local/bin/argocd
       - name: NIMService health check
         run: uv run --with pyyaml bash scripts/test-health.sh
+      - name: platform-gitops reference - Argo CD health checks (Argo's Lua engine)
+        run: scripts/test-reference-health.sh

@@ -1,0 +1,6 @@
+# airgap-auth: bad-file fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: an NGC key file for air-gapped QA
+expect: fail
+ops:
+- file: secrets/qa/ngc-api-key.sops.yaml
+  copy: secrets/dev/ngc-api-key.sops.yaml

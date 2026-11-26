@@ -1,0 +1,8 @@
+# catalogue-schema: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: service kind typo
+expect: fail
+ops:
+- file: catalogue/services.yaml
+  replace:
+  - 'kind: deployment'
+  - 'kind: deploymnet'

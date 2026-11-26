@@ -1,0 +1,13 @@
+# nim-cache-writable: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: read-only NIM cache (schema-valid, fails at runtime)
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  set:
+  - spec
+  - storage
+  - readOnly
+  value: true

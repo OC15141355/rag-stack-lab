@@ -1,0 +1,8 @@
+# chart-checksums: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+description: a vendored archive no longer matches SHA256SUMS
+expect: fail
+ops:
+- file: platform/charts/SHA256SUMS
+  replace:
+  - 506898724dc23aa5
+  - 000000000000dead
