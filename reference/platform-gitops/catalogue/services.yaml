@@ -8,6 +8,8 @@
 #   deprecated         = deprecated.after is set (and names a replacement)
 #   retired            = retired: true (every env block must then be disabled)
 # Promotion = copy envs.<prev> to envs.<next> in a PR that also adds the <prev> smoke evidence (catalogue/evidence/).
+# Every env block is written out in full: NO YAML anchors or aliases (CI check no-yaml-aliases). An alias shared by
+# two env blocks would turn a DEV edit into a silent QA+PROD edit.
 services:
   # A large model: 8 GPUs, ~1.5 TB of weights. Same version in all three environments.
   - id: chat/glm                      # served name at the gateway, preserved across moves
@@ -21,7 +23,7 @@ services:
     support_ends: null
     review_by: 2027-03-31
     envs:
-      dev: &glm-r2026-11
+      dev:
         enabled: true
         image: registry.internal.example/nim/zai-org/glm-5.3:2.2.1@sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
         profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
@@ -33,9 +35,29 @@ services:
           pvc: glm-r2026-11
           size: 1536Gi
         rpm: 30
-      qa: *glm-r2026-11
+      qa:
+        enabled: true
+        image: registry.internal.example/nim/zai-org/glm-5.3:2.2.1@sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
+        profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
+        gpus: 8
+        weights:
+          source_uri: mirror://models/zai-org/glm-5.3/r2026-11
+          revision: r2026-11
+          manifest_sha256: 2315582919fe093f5572208dbf73b6e63263920491504b8466442ebc8588eecf
+          pvc: glm-r2026-11
+          size: 1536Gi
+        rpm: 30
       prod:
-        <<: *glm-r2026-11
+        enabled: true
+        image: registry.internal.example/nim/zai-org/glm-5.3:2.2.1@sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
+        profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
+        gpus: 8
+        weights:
+          source_uri: mirror://models/zai-org/glm-5.3/r2026-11
+          revision: r2026-11
+          manifest_sha256: 2315582919fe093f5572208dbf73b6e63263920491504b8466442ebc8588eecf
+          pvc: glm-r2026-11
+          size: 1536Gi
         rpm: 120
     deprecated: {after: null, replacement: null}
     retired: false
@@ -57,21 +79,37 @@ services:
         image: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.2@sha256:7ebb10085202dc4f27dd4bb8b1fae52af548b6169cf4e0f06ae56c940f4e1cb8
         profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
         gpus: 2
-        weights: &nemotron-weights-r2026-09
+        weights:
           source_uri: mirror://models/nvidia/llama-3.3-nemotron-super-49b-v1.5/r2026-09
           revision: r2026-09
           manifest_sha256: 95230825ab088a1d60c9236c7ddf4ded6c74be1b500e66bcd5f3a5f77b69287f
           pvc: nemotron-super-r2026-09
           size: 200Gi
         rpm: 60
-      qa: &nemotron-n                 # N: what PROD runs; promoted with DEV then QA evidence
+      qa:                             # N: what PROD runs; promoted with DEV then QA evidence
         enabled: true
         image: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.1@sha256:d831a25fd0b23b26b30568fd2f51db4f03b85ccd66617dcf1a3741aeaa7588c9
         profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
         gpus: 2
-        weights: *nemotron-weights-r2026-09
+        weights:
+          source_uri: mirror://models/nvidia/llama-3.3-nemotron-super-49b-v1.5/r2026-09
+          revision: r2026-09
+          manifest_sha256: 95230825ab088a1d60c9236c7ddf4ded6c74be1b500e66bcd5f3a5f77b69287f
+          pvc: nemotron-super-r2026-09
+          size: 200Gi
         rpm: 60
-      prod: *nemotron-n
+      prod:
+        enabled: true
+        image: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.1@sha256:d831a25fd0b23b26b30568fd2f51db4f03b85ccd66617dcf1a3741aeaa7588c9
+        profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
+        gpus: 2
+        weights:
+          source_uri: mirror://models/nvidia/llama-3.3-nemotron-super-49b-v1.5/r2026-09
+          revision: r2026-09
+          manifest_sha256: 95230825ab088a1d60c9236c7ddf4ded6c74be1b500e66bcd5f3a5f77b69287f
+          pvc: nemotron-super-r2026-09
+          size: 200Gi
+        rpm: 60
     deprecated: {after: 2027-01-31, replacement: chat/glm}
     retired: false
 
@@ -87,12 +125,16 @@ services:
     support_ends: null
     review_by: 2027-03-31
     envs:
-      dev: &asr-n
+      dev:
         enabled: true
         image: registry.internal.example/nim/nvidia/parakeet-ctc-1.1b-asr:2.0.0@sha256:ec1d31827aefd31011f35fe1bfc610aaa0ad07791cb25b98f8205051e5f89c69
         gpus: 1
         replicas: 1
-      qa: *asr-n
+      qa:
+        enabled: true
+        image: registry.internal.example/nim/nvidia/parakeet-ctc-1.1b-asr:2.0.0@sha256:ec1d31827aefd31011f35fe1bfc610aaa0ad07791cb25b98f8205051e5f89c69
+        gpus: 1
+        replicas: 1
       prod: {enabled: false}
     deprecated: {after: null, replacement: null}
     retired: false

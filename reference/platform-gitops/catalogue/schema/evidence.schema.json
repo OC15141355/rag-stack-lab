@@ -29,6 +29,7 @@
       "type": "string"
     },
     "render_hash": {
+      "description": "env-wide hash from the smoke report (SYNC_REVISION); ties the record to the report, not recomputable later",
       "pattern": "^sha256:[0-9a-f]{64}$",
       "type": "string"
     },
@@ -39,6 +40,11 @@
       ]
     },
     "service": {
+      "type": "string"
+    },
+    "service_hash": {
+      "description": "render.py --service-hash: sha256 of the env's rendered 30-services/<service>.yaml for this block",
+      "pattern": "^sha256:[0-9a-f]{64}$",
       "type": "string"
     },
     "smoke": {
@@ -76,15 +82,16 @@
     }
   },
   "required": [
-    "service",
     "env",
-    "result",
     "image_digest",
     "profile_id",
-    "weights_revision",
+    "recorded",
     "render_hash",
+    "result",
+    "service",
+    "service_hash",
     "smoke",
-    "recorded"
+    "weights_revision"
   ],
   "title": "catalogue/evidence/<env>/*.yaml (one smoke result)",
   "type": "object"

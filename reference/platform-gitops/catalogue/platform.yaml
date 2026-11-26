@@ -65,7 +65,7 @@ components:
       gfd: repo-image-version
       node-feature-discovery.image: repository-tag
     envs:
-      dev: &gpu-operator-v26-7-3
+      dev:
         chart: gpu-operator
         version: v26.7.3
         images:
@@ -75,8 +75,26 @@ components:
           devicePlugin: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
           gfd: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
           node-feature-discovery.image: registry.internal.example/nfd/node-feature-discovery:v0.20.1@sha256:d7805a7eecbf5801943f5cfc56dc8f0d8e209479a0077f08e43e7c2d2f6a262a
-      qa: *gpu-operator-v26-7-3
-      prod: *gpu-operator-v26-7-3
+      qa:
+        chart: gpu-operator
+        version: v26.7.3
+        images:
+          operator: registry.internal.example/nvidia/gpu-operator:v26.7.3@sha256:d0bc593a9f57edc165ca0e9917c92a752016ea1c125b5019acbf0989bd9e9d87
+          validator: registry.internal.example/nvidia/gpu-operator:v26.7.3@sha256:d0bc593a9f57edc165ca0e9917c92a752016ea1c125b5019acbf0989bd9e9d87
+          toolkit: registry.internal.example/nvidia/k8s/container-toolkit:v1.20.2@sha256:0070f5e72c316ccee1f3d99ba51b3ec0d10864061287a958104be478b7ff6460
+          devicePlugin: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
+          gfd: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
+          node-feature-discovery.image: registry.internal.example/nfd/node-feature-discovery:v0.20.1@sha256:d7805a7eecbf5801943f5cfc56dc8f0d8e209479a0077f08e43e7c2d2f6a262a
+      prod:
+        chart: gpu-operator
+        version: v26.7.3
+        images:
+          operator: registry.internal.example/nvidia/gpu-operator:v26.7.3@sha256:d0bc593a9f57edc165ca0e9917c92a752016ea1c125b5019acbf0989bd9e9d87
+          validator: registry.internal.example/nvidia/gpu-operator:v26.7.3@sha256:d0bc593a9f57edc165ca0e9917c92a752016ea1c125b5019acbf0989bd9e9d87
+          toolkit: registry.internal.example/nvidia/k8s/container-toolkit:v1.20.2@sha256:0070f5e72c316ccee1f3d99ba51b3ec0d10864061287a958104be478b7ff6460
+          devicePlugin: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
+          gfd: registry.internal.example/nvidia/k8s-device-plugin:v0.20.2@sha256:1baa46a1b04d2ff8c47ba56ba8035e7ccf2c885d8d02ade8ee2e1a1b852f9040
+          node-feature-discovery.image: registry.internal.example/nfd/node-feature-discovery:v0.20.1@sha256:d7805a7eecbf5801943f5cfc56dc8f0d8e209479a0077f08e43e7c2d2f6a262a
     notes: >-
       Bumps rename DCGM metrics (26.7.3): dashboards are part of the upgrade. Driver bumps evict GPU pods: a planned
       outage for that node's models. Only v26.7.3 is vendored in this template; a per-env bump vendors the new archive.
@@ -89,9 +107,9 @@ components:
     support_ends: null              # not on a public page: ask NVIDIA (open question 3); CI warns while null
     review_by: 2026-12-31
     envs:
-      dev: &nim-crds-3-1-4 {chart: k8s-nim-operator, version: 3.1.4}
-      qa: *nim-crds-3-1-4
-      prod: *nim-crds-3-1-4
+      dev: {chart: k8s-nim-operator, version: 3.1.4}
+      qa: {chart: k8s-nim-operator, version: 3.1.4}
+      prod: {chart: k8s-nim-operator, version: 3.1.4}
     notes: CRDs bump BEFORE the operator (own folder 00-crds, own Argo app, server-side apply).
 
   - id: nim-operator
@@ -106,13 +124,21 @@ components:
     image_values:
       operator.image: repository-tag
     envs:
-      dev: &nim-operator-3-1-4
+      dev:
         chart: k8s-nim-operator
         version: 3.1.4
         images:
           operator.image: registry.internal.example/nvidia/cloud-native/k8s-nim-operator:v3.1.4@sha256:f8d27600263e754a360f0cfdafe90b6071f2adf1f50edf0a9f599c1d9e58599d
-      qa: *nim-operator-3-1-4
-      prod: *nim-operator-3-1-4
+      qa:
+        chart: k8s-nim-operator
+        version: 3.1.4
+        images:
+          operator.image: registry.internal.example/nvidia/cloud-native/k8s-nim-operator:v3.1.4@sha256:f8d27600263e754a360f0cfdafe90b6071f2adf1f50edf0a9f599c1d9e58599d
+      prod:
+        chart: k8s-nim-operator
+        version: 3.1.4
+        images:
+          operator.image: registry.internal.example/nvidia/cloud-native/k8s-nim-operator:v3.1.4@sha256:f8d27600263e754a360f0cfdafe90b6071f2adf1f50edf0a9f599c1d9e58599d
     notes: The operator's ClusterRole can read every Secret (Phase A); manage it from the platform project only.
 
   - id: gateway
@@ -123,12 +149,18 @@ components:
     support_ends: null
     review_by: 2027-02-28
     envs:
-      dev: &bifrost-2-6-0
+      dev:
         version: v2.6.0
         images:
           bifrost: registry.internal.example/maximhq/bifrost:v2.6.0@sha256:92b1c866031e67d270a2869e0e8b8db25de3227f07b129cdb0ac17f7ef64afc2
-      qa: *bifrost-2-6-0
-      prod: *bifrost-2-6-0
+      qa:
+        version: v2.6.0
+        images:
+          bifrost: registry.internal.example/maximhq/bifrost:v2.6.0@sha256:92b1c866031e67d270a2869e0e8b8db25de3227f07b129cdb0ac17f7ef64afc2
+      prod:
+        version: v2.6.0
+        images:
+          bifrost: registry.internal.example/maximhq/bifrost:v2.6.0@sha256:92b1c866031e67d270a2869e0e8b8db25de3227f07b129cdb0ac17f7ef64afc2
     notes: Bifrost, file-based config generated per env from services.yaml (40-gateway).
 
   - id: job-runner
@@ -138,12 +170,18 @@ components:
     nvidia_branch: none
     support_ends: 2028-10-31        # EXAMPLE: the base image's upstream end of life
     envs:
-      dev: &python-3-12
+      dev:
         version: "3.12"
         images:
           python: registry.internal.example/library/python:3.12-slim@sha256:61229bd98aaaf350c0eb3ea8584b6cb2a33e94451e62684e7c757dc2755f5339
-      qa: *python-3-12
-      prod: *python-3-12
+      qa:
+        version: "3.12"
+        images:
+          python: registry.internal.example/library/python:3.12-slim@sha256:61229bd98aaaf350c0eb3ea8584b6cb2a33e94451e62684e7c757dc2755f5339
+      prod:
+        version: "3.12"
+        images:
+          python: registry.internal.example/library/python:3.12-slim@sha256:61229bd98aaaf350c0eb3ea8584b6cb2a33e94451e62684e7c757dc2755f5339
     notes: Runs the smoke Job (tools/smoke.py) and the weights verify Job (tools/verify_weights.py). Stdlib only.
 
   - id: nim-production-branch
@@ -166,7 +204,7 @@ components:
     review_by: 2027-01-15
     envs: {}
     notes: >-
-      Adopted per model only after an air-gapped proof on that model's hardware (UNVERIFIED today). Until then no
+      Adopted per model only after an air-gapped proof on that model's hardware (UNVERIFIED). Until then no
       environment block exists, so nothing renders.
 
   - id: argocd
@@ -197,15 +235,17 @@ components:
     envs: {}
     notes: Only needed for multi-node NIMs; none in the catalogue yet.
 
-  - id: ksops
+  - id: sops-plugin
     owner: platform-team
     kind: external
     state: adopted
     nvidia_branch: none
     support_ends: null
     review_by: 2027-02-28
-    envs: {dev: {version: v4.4.0}, qa: {version: v4.4.0}, prod: {version: v4.4.0}}
-    notes: SOPS decryption inside Argo CD (CMP). One age recipient per environment (.sops.yaml).
+    envs: {dev: {version: sops-v3.13.3}, qa: {version: sops-v3.13.3}, prod: {version: sops-v3.13.3}}
+    notes: >-
+      Argo CD Config Management Plugin (sops + kustomize, argocd/config/cmp-plugin.yaml) that decrypts secrets/<env>
+      for the <env>-secrets app; CI decrypts with sops on the env's runner. One age recipient per environment.
 
   - id: rwx-storage
     owner: platform-team
