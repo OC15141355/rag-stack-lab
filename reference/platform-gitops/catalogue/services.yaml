@@ -1,0 +1,98 @@
+# catalogue/services.yaml - LAYER A: every model or service, with one block per environment.
+#
+# EXAMPLE VALUES. Images, sha256 digests, profile IDs, weights hashes and mirror paths below are FABRICATED
+# placeholders that show the shape. Never copy one into a real environment.
+#
+# Lifecycle state is DERIVED, never typed:
+#   in an environment  = envs.<env>.enabled is true
+#   deprecated         = deprecated.after is set (and names a replacement)
+#   retired            = retired: true (every env block must then be disabled)
+# Promotion = copy envs.<prev> to envs.<next> in a PR that also adds the <prev> smoke evidence (catalogue/evidence/).
+services:
+  # A large model: 8 GPUs, ~1.5 TB of weights. Same version in all three environments.
+  - id: chat/glm                      # served name at the gateway, preserved across moves
+    owner: platform-team
+    kind: nim-llm                     # nim-llm | deployment
+    capabilities: [chat, stream, tools]
+    served_model: zai-org/glm-5.3     # the NIM's own served model name (the gateway's upstream name)
+    tool_parser: glm45                # per model; feeds NIM_PASSTHROUGH_ARGS
+    limits: {context: 131072, max_output: 8192}
+    cold_start_seconds: 2400          # measured cold start; sizes the smoke deadline (900 s fails a 750B model)
+    support_ends: null
+    review_by: 2027-03-31
+    envs:
+      dev: &glm-r2026-11
+        enabled: true
+        image: registry.internal.example/nim/zai-org/glm-5.3:2.2.1@sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
+        profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
+        gpus: 8
+        weights:
+          source_uri: mirror://models/zai-org/glm-5.3/r2026-11
+          revision: r2026-11
+          manifest_sha256: 2315582919fe093f5572208dbf73b6e63263920491504b8466442ebc8588eecf
+          pvc: glm-r2026-11
+          size: 1536Gi
+        rpm: 30
+      qa: *glm-r2026-11
+      prod:
+        <<: *glm-r2026-11
+        rpm: 120
+    deprecated: {after: null, replacement: null}
+    retired: false
+
+  # A mid model: 2 GPUs. PROD on version N while N+1 goes through DEV. Deprecated: model-specific NIMs of this
+  # family reach end of support in January 2027 (NVIDIA EOL notices); the replacement is named.
+  - id: chat/nemotron-super
+    owner: platform-team
+    kind: nim-llm
+    capabilities: [chat, stream, tools]
+    served_model: nvidia/llama-3.3-nemotron-super-49b-v1.5
+    tool_parser: llama3_json
+    limits: {context: 131072, max_output: 8192}
+    cold_start_seconds: 900
+    support_ends: 2027-01-31
+    envs:
+      dev:                            # N+1: a patch release on the same weights
+        enabled: true
+        image: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.2@sha256:7ebb10085202dc4f27dd4bb8b1fae52af548b6169cf4e0f06ae56c940f4e1cb8
+        profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
+        gpus: 2
+        weights: &nemotron-weights-r2026-09
+          source_uri: mirror://models/nvidia/llama-3.3-nemotron-super-49b-v1.5/r2026-09
+          revision: r2026-09
+          manifest_sha256: 95230825ab088a1d60c9236c7ddf4ded6c74be1b500e66bcd5f3a5f77b69287f
+          pvc: nemotron-super-r2026-09
+          size: 200Gi
+        rpm: 60
+      qa: &nemotron-n                 # N: what PROD runs; promoted with DEV then QA evidence
+        enabled: true
+        image: registry.internal.example/nim/nvidia/llama-3.3-nemotron-super-49b-v1.5:1.15.1@sha256:d831a25fd0b23b26b30568fd2f51db4f03b85ccd66617dcf1a3741aeaa7588c9
+        profile_id: 30b3c6fb4849fb25270f5318d6a6b3e01ee8986ddd5acb6173aad06a5c732846
+        gpus: 2
+        weights: *nemotron-weights-r2026-09
+        rpm: 60
+      prod: *nemotron-n
+    deprecated: {after: 2027-01-31, replacement: chat/glm}
+    retired: false
+
+  # A speech service: not an LLM NIM. A plain Deployment with its own ports and its own smoke; weights are
+  # baked into the image, so it has no weights block. Not yet in PROD.
+  - id: speech/asr
+    owner: platform-team
+    kind: deployment
+    capabilities: [asr]
+    ports: {http: 9000, grpc: 50051}
+    health_path: /v1/health/ready
+    cold_start_seconds: 600
+    support_ends: null
+    review_by: 2027-03-31
+    envs:
+      dev: &asr-n
+        enabled: true
+        image: registry.internal.example/nim/nvidia/parakeet-ctc-1.1b-asr:2.0.0@sha256:ec1d31827aefd31011f35fe1bfc610aaa0ad07791cb25b98f8205051e5f89c69
+        gpus: 1
+        replicas: 1
+      qa: *asr-n
+      prod: {enabled: false}
+    deprecated: {after: null, replacement: null}
+    retired: false

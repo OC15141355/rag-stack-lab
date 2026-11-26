@@ -1,0 +1,24 @@
+# GPU Operator values shared by every environment. NO image references here: render.py writes them from
+# catalogue/platform.yaml (image_values). Environment differences go in <env>.yaml, merged over this file.
+driver: {enabled: false}          # host driver comes with the node image (bootstrap/); a driver bump is a planned outage
+toolkit: {enabled: true}
+cdi: {enabled: true}
+nfd: {enabled: true}
+devicePlugin: {enabled: true}
+gfd: {enabled: true}
+dcgm: {enabled: false}
+dcgmExporter: {enabled: false, serviceMonitor: {enabled: false}}
+migManager: {enabled: false}
+nodeStatusExporter: {enabled: false}
+gds: {enabled: false}
+gdrcopy: {enabled: false}
+vgpuManager: {enabled: false}
+vgpuDeviceManager: {enabled: false}
+vfioManager: {enabled: false}
+sandboxDevicePlugin: {enabled: false}
+kataSandboxDevicePlugin: {enabled: false}
+ccManager: {enabled: false}
+operator:
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {memory: 512Mi}

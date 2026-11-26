@@ -1,0 +1,14 @@
+# One age recipient per environment: a runner (or Argo KSOPS) holding only the QA key can never decrypt PROD.
+# EXAMPLE recipients: throwaway keys whose private halves were deleted when the example files were made, so the
+# committed secrets/ files are undecryptable placeholders. Replace each with that environment's real recipient and
+# re-create the files with `sops -e`. tools/checks.py (sops-recipients) enforces file <-> recipient matching.
+creation_rules:
+  - path_regex: (^|/)secrets/dev/[a-z0-9-]+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1mm7x0zqq4nl3xyf265rrzermkg6nme8a72hgsdqkrtnql8w6dsjsp60w57
+  - path_regex: (^|/)secrets/qa/[a-z0-9-]+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1z77zvsjdkcjspd2mwvfm2elw9qe5jk0f467l2r4c2khhh57ydddqryymep
+  - path_regex: (^|/)secrets/prod/[a-z0-9-]+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1kry53slvdj6r54sf7rrs7yve048clmezj9nv8tzr8gzqnvdjw3qq6dk5kt

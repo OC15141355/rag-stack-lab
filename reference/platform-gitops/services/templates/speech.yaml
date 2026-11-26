@@ -1,0 +1,52 @@
+# A non-LLM service (kind: deployment): a plain Deployment + Service with its own ports. No NIM Operator, so no
+# operator ingress rule; callers are the env's client namespaces plus the gateway namespace's smoke Job.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "${name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+spec:
+  replicas: "${replicas}"
+  strategy: {type: Recreate}
+  selector: {matchLabels: {platform-gitops/service: "${service_label}"}}
+  template:
+    metadata:
+      labels: {platform-gitops/service: "${service_label}", app.kubernetes.io/component: speech}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: server
+          image: "${image}"
+          ports: "${container_ports}"
+          readinessProbe: {httpGet: {path: "${health_path}", port: "${http_port}"}, periodSeconds: 10}
+          startupProbe: {httpGet: {path: "${health_path}", port: "${http_port}"}, periodSeconds: 10, failureThreshold: "${startup_failure_threshold}"}
+          resources:
+            requests: {cpu: "2", memory: 8Gi, nvidia.com/gpu: "${gpus}"}
+            limits: {memory: 8Gi, nvidia.com/gpu: "${gpus}"}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "${name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+spec:
+  selector: {platform-gitops/service: "${service_label}"}
+  ports: "${service_ports}"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "${name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+spec:
+  podSelector: {matchLabels: {platform-gitops/service: "${service_label}"}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: "${client_peers}"
+      ports: "${policy_ports}"
+  egress: "${egress_rules}"

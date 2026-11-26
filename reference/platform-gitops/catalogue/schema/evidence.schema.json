@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "env": {
+      "enum": [
+        "dev",
+        "qa",
+        "prod"
+      ]
+    },
+    "image_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "profile_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recorded": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "type": "string"
+    },
+    "render_hash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "service": {
+      "type": "string"
+    },
+    "smoke": {
+      "additionalProperties": false,
+      "properties": {
+        "failed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "passed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skipped": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "passed",
+        "failed",
+        "skipped"
+      ],
+      "type": "object"
+    },
+    "weights_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "service",
+    "env",
+    "result",
+    "image_digest",
+    "profile_id",
+    "weights_revision",
+    "render_hash",
+    "smoke",
+    "recorded"
+  ],
+  "title": "catalogue/evidence/<env>/*.yaml (one smoke result)",
+  "type": "object"
+}

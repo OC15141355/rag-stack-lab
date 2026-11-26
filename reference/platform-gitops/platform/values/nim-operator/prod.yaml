@@ -1,0 +1,5 @@
+# PROD-only NIM Operator values (merged over base.yaml).
+operator:
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {memory: 512Mi}

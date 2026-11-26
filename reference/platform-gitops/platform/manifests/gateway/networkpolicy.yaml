@@ -1,0 +1,30 @@
+# Gateway flows: in from the ingress controller and from this namespace's smoke Jobs; out to model pods only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: bifrost, namespace: gateway}
+spec:
+  podSelector: {matchLabels: {app: bifrost}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: "${ingress_namespace}"}}
+        - podSelector: {matchLabels: {app: smoke}}
+      ports: [{port: 8080, protocol: TCP}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: models}}
+          podSelector: {matchLabels: {app.kubernetes.io/component: nim-llm}}
+      ports: [{port: 8000, protocol: TCP}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: smoke, namespace: gateway}
+spec:
+  podSelector: {matchLabels: {app: smoke}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{podSelector: {matchLabels: {app: bifrost}}}]
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: models}}
+          podSelector: {matchLabels: {app.kubernetes.io/component: speech}}

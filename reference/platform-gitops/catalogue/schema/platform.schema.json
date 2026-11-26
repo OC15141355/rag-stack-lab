@@ -1,0 +1,543 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "components": {
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "helm",
+                    "helm-crds"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "envs": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dev": {
+                      "required": [
+                        "chart",
+                        "version"
+                      ]
+                    },
+                    "prod": {
+                      "required": [
+                        "chart",
+                        "version"
+                      ]
+                    },
+                    "qa": {
+                      "required": [
+                        "chart",
+                        "version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "helm"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "namespace",
+                "crds"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "support_ends": {
+                  "type": "null"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "review_by"
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "crds": {
+            "enum": [
+              "include",
+              "skip"
+            ]
+          },
+          "envs": {
+            "additionalProperties": false,
+            "properties": {
+              "dev": {
+                "additionalProperties": false,
+                "properties": {
+                  "chart": {
+                    "type": "string"
+                  },
+                  "images": {
+                    "additionalProperties": {
+                      "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "version": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ],
+                "type": "object"
+              },
+              "prod": {
+                "additionalProperties": false,
+                "properties": {
+                  "chart": {
+                    "type": "string"
+                  },
+                  "images": {
+                    "additionalProperties": {
+                      "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "version": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ],
+                "type": "object"
+              },
+              "qa": {
+                "additionalProperties": false,
+                "properties": {
+                  "chart": {
+                    "type": "string"
+                  },
+                  "images": {
+                    "additionalProperties": {
+                      "pattern": "^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "version": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ],
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "pattern": "^[a-z0-9-]+$",
+            "type": "string"
+          },
+          "image_values": {
+            "additionalProperties": {
+              "enum": [
+                "repo-image-version",
+                "repository-tag"
+              ]
+            },
+            "type": "object"
+          },
+          "kind": {
+            "enum": [
+              "helm",
+              "helm-crds",
+              "manifests",
+              "image",
+              "external"
+            ]
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "nvidia_branch": {
+            "enum": [
+              "infrastructure",
+              "production",
+              "ltsb",
+              "feature",
+              "none"
+            ]
+          },
+          "owner": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "review_by": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "adopted",
+              "evaluating",
+              "deprecated"
+            ]
+          },
+          "support_ends": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "kind",
+          "state",
+          "nvidia_branch",
+          "support_ends",
+          "envs"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "environments": {
+      "additionalProperties": false,
+      "properties": {
+        "dev": {
+          "additionalProperties": false,
+          "properties": {
+            "air_gapped": {
+              "type": "boolean"
+            },
+            "client_namespaces": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "gateway": {
+              "additionalProperties": false,
+              "properties": {
+                "log_retention_days": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "probe_requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "tokens_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "requests_per_minute",
+                "tokens_per_minute",
+                "probe_requests_per_minute",
+                "log_retention_days"
+              ],
+              "type": "object"
+            },
+            "gpu_quota": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ingress_namespace": {
+              "type": "string"
+            },
+            "internal_ranges": {
+              "items": {
+                "pattern": "^[0-9.]+/[0-9]+$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "storage": {
+              "additionalProperties": false,
+              "properties": {
+                "access_mode": {
+                  "enum": [
+                    "ReadWriteMany",
+                    "ReadWriteOnce"
+                  ]
+                },
+                "provisioner": {
+                  "type": "string"
+                },
+                "weights_class": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "provisioner",
+                "weights_class",
+                "access_mode"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "air_gapped",
+            "internal_ranges",
+            "ingress_namespace",
+            "client_namespaces",
+            "gpu_quota",
+            "storage",
+            "gateway"
+          ],
+          "type": "object"
+        },
+        "prod": {
+          "additionalProperties": false,
+          "properties": {
+            "air_gapped": {
+              "type": "boolean"
+            },
+            "client_namespaces": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "gateway": {
+              "additionalProperties": false,
+              "properties": {
+                "log_retention_days": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "probe_requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "tokens_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "requests_per_minute",
+                "tokens_per_minute",
+                "probe_requests_per_minute",
+                "log_retention_days"
+              ],
+              "type": "object"
+            },
+            "gpu_quota": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ingress_namespace": {
+              "type": "string"
+            },
+            "internal_ranges": {
+              "items": {
+                "pattern": "^[0-9.]+/[0-9]+$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "storage": {
+              "additionalProperties": false,
+              "properties": {
+                "access_mode": {
+                  "enum": [
+                    "ReadWriteMany",
+                    "ReadWriteOnce"
+                  ]
+                },
+                "provisioner": {
+                  "type": "string"
+                },
+                "weights_class": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "provisioner",
+                "weights_class",
+                "access_mode"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "air_gapped",
+            "internal_ranges",
+            "ingress_namespace",
+            "client_namespaces",
+            "gpu_quota",
+            "storage",
+            "gateway"
+          ],
+          "type": "object"
+        },
+        "qa": {
+          "additionalProperties": false,
+          "properties": {
+            "air_gapped": {
+              "type": "boolean"
+            },
+            "client_namespaces": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "gateway": {
+              "additionalProperties": false,
+              "properties": {
+                "log_retention_days": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "probe_requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "requests_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "tokens_per_minute": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "requests_per_minute",
+                "tokens_per_minute",
+                "probe_requests_per_minute",
+                "log_retention_days"
+              ],
+              "type": "object"
+            },
+            "gpu_quota": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ingress_namespace": {
+              "type": "string"
+            },
+            "internal_ranges": {
+              "items": {
+                "pattern": "^[0-9.]+/[0-9]+$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "storage": {
+              "additionalProperties": false,
+              "properties": {
+                "access_mode": {
+                  "enum": [
+                    "ReadWriteMany",
+                    "ReadWriteOnce"
+                  ]
+                },
+                "provisioner": {
+                  "type": "string"
+                },
+                "weights_class": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "provisioner",
+                "weights_class",
+                "access_mode"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "air_gapped",
+            "internal_ranges",
+            "ingress_namespace",
+            "client_namespaces",
+            "gpu_quota",
+            "storage",
+            "gateway"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "dev",
+        "qa",
+        "prod"
+      ],
+      "type": "object"
+    },
+    "tools": {
+      "additionalProperties": false,
+      "properties": {
+        "helm": {
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "type": "string"
+        },
+        "kube_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "helm",
+        "kube_version"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "tools",
+    "environments",
+    "components"
+  ],
+  "title": "catalogue/platform.yaml (layer B)",
+  "type": "object"
+}

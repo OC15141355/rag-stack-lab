@@ -1,0 +1,2 @@
+# PROD-only GPU Operator values (merged over base.yaml).
+dcgmExporter: {enabled: false, serviceMonitor: {enabled: false}}   # enable with its image in the catalogue, and the dashboards

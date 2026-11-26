@@ -1,0 +1,28 @@
+# NIMCache for one (service, weights revision). The PVC is NOT created by the operator (pvc.create: false): it is
+# the separately managed weights PVC from 20-weights (StorageClass reclaimPolicy Retain), filled by a tracked
+# transfer and checked by the verify Job. A revert points the NIMService back at a PVC that still exists.
+# UNVERIFIED (open question 4): whether the operator's caching Job is a no-op on a pre-staged PVC in an air gap.
+# ${...} placeholders are filled by tools/render.py; ${auth_secret} is dropped entirely in air-gapped envs.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMCache
+metadata:
+  name: "${cache_name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  source:
+    ngc:
+      modelPuller: "${image}"
+      authSecret: "${auth_secret}"
+      model:
+        profiles: ["${profile_id}"]
+  storage:
+    pvc:
+      create: false
+      name: "${pvc}"
+  resources: {cpu: "2", memory: 8Gi}
+  userID: 1000
+  groupID: 2000

@@ -1,0 +1,10 @@
+# EXAMPLE evidence record (fabricated hashes).
+service: chat/glm
+env: qa
+result: pass
+image_digest: sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
+profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
+weights_revision: r2026-11
+render_hash: sha256:ed1cd5ec36d94ca46133ffa1f26e0a2d3127e30e9a252ba33a6b1197026146b4
+smoke: {passed: 6, failed: 0, skipped: 0}
+recorded: 2026-11-21

@@ -1,0 +1,10 @@
+# EXAMPLE evidence record (fabricated hashes). Written from the smoke Job's JSON report by the promotion PR.
+service: chat/glm
+env: dev
+result: pass
+image_digest: sha256:c7953683fd32ad8139618e601834a972cb450d2f0d26242576ff7a37b4a7bb54
+profile_id: 98130afd2092231f1e308d01aca200c5d5f06fe9a4223561e47b9f807d642bea
+weights_revision: r2026-11
+render_hash: sha256:0226190ca7e81648e1dbc74ad3579e5a6bcdb6e9c280923514d1daa9aacfc57d
+smoke: {passed: 6, failed: 0, skipped: 0}
+recorded: 2026-11-18

@@ -1,0 +1,46 @@
+# NIMService for one LLM. Defaults below were each hit live in the lab (design section 11):
+#   readOnly: false        NIM 2.1.7 refuses a read-only cache ("Cache directory /model-store is not accessible")
+#   NIM_PASSTHROUGH_ARGS   tool calling needs --enable-auto-tool-choice + the per-model parser (catalogue tool_parser)
+#   no authSecret          in air-gapped envs (no NGC credentials exist there)
+#   startupProbe           failureThreshold sized from the catalogue's measured cold_start_seconds
+# The init container refuses to start the model unless the verify Job marked this weights manifest as checked.
+# UNVERIFIED: that the operator mounts the cache volume into initContainers. If it does not, the marker is never
+# found and the pod does not start: the gate fails closed, never open. Prove it in DEV first.
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata:
+  name: "${name}"
+  namespace: models
+  labels: {platform-gitops/service: "${service_label}"}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  image:
+    repository: "${image_repository}"
+    tag: "${image_tag}"
+    pullPolicy: IfNotPresent
+  authSecret: "${auth_secret}"
+  storage:
+    nimCache: {name: "${cache_name}", profile: "${profile_id}"}
+    readOnly: false
+    sharedMemorySizeLimit: 16Gi
+  labels: {app.kubernetes.io/component: nim-llm, platform-gitops/service: "${service_label}"}
+  env: "${nim_env}"                      # NIM_SERVED_MODEL_NAME + NIM_PASSTHROUGH_ARGS (tool parser), from the catalogue
+  initContainers:
+    - name: weights-verified
+      image: {repository: "${verify_repository}", tag: "${verify_tag}"}   # NIMService wants an object here
+      command: ["python3", "-c", "import os,sys; m='/model-store/.verified-${manifest_sha256}'; sys.exit(0 if os.path.exists(m) else 'weights not verified: ' + m)"]
+  resources:
+    requests: {cpu: "${cpu}", memory: "${memory}", nvidia.com/gpu: "${gpus}"}
+    limits: {memory: "${memory}", nvidia.com/gpu: "${gpus}"}
+  replicas: 1
+  userID: 1000
+  groupID: 2000
+  startupProbe:
+    enabled: true
+    probe:
+      httpGet: {path: /v1/health/ready, port: 8000}
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: "${startup_failure_threshold}"
+  expose: {service: {name: "${name}", type: ClusterIP, port: 8000}}

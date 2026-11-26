@@ -1,0 +1,10 @@
+# EXAMPLE evidence record (fabricated hashes). A deployment-kind service has no profile and no weights revision.
+service: speech/asr
+env: dev
+result: pass
+image_digest: sha256:ec1d31827aefd31011f35fe1bfc610aaa0ad07791cb25b98f8205051e5f89c69
+profile_id: null
+weights_revision: null
+render_hash: sha256:ce19e6cd06aa3a65245999c900a07343a70eee4449e53bdb7537a100c13ba951
+smoke: {passed: 1, failed: 0, skipped: 0}
+recorded: 2026-11-12

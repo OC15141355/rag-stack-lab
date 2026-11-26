@@ -1,0 +1,9 @@
+# Weights StorageClass: reclaimPolicy Retain, so deleting a weights PVC never deletes the 1.5 TB underneath it.
+# Weights PVCs (clusters/<env>/20-weights) must use this class (CI check weights-storage).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: {name: "${weights_class}"}
+provisioner: "${provisioner}"
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
