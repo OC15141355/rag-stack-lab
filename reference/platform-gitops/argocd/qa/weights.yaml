@@ -1,0 +1,29 @@
+# HAND-APPLIED, OUTSIDE the app-of-apps wave chain: a 1.5 TB weights transfer/verify never blocks an urgent
+# gateway fix. Never pruned (PVCs also carry Prune=false,Delete=false). Manual sync.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: qa-weights
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: services
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: clusters/qa/20-weights
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

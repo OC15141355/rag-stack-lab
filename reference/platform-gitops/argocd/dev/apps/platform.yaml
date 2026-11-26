@@ -1,0 +1,39 @@
+# Child of dev-root (wave 1). Watches only clusters/dev/10-platform. DEV: automated sync.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: clusters/dev/10-platform
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+  - group: nvidia.com
+    kind: ClusterPolicy
+    managedFieldsManagers:
+    - gpu-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

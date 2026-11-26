@@ -1,0 +1,32 @@
+# Child of prod-root (wave 1). Watches only clusters/prod/10-platform. PROD: MANUAL sync, inside the project's sync window only.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: clusters/prod/10-platform
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+  - group: nvidia.com
+    kind: ClusterPolicy
+    managedFieldsManagers:
+    - gpu-operator
+  syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 0

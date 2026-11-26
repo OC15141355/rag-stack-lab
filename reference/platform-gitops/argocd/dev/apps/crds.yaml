@@ -1,0 +1,33 @@
+# Child of dev-root (wave 0). Watches only clusters/dev/00-crds. DEV: automated sync.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: clusters/dev/00-crds
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

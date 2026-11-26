@@ -1,0 +1,20 @@
+# HAND-APPLIED app-of-apps for the prod cluster: crds (0) -> platform (1) -> services (2) -> gateway (3).
+# Waves on Applications wait for Application health (argocd/config/argocd-cm.yaml). Weights: see weights.yaml.
+# Handover from CI apply (design section 7): disable this env's CI apply jobs, first sync with prune false, review the
+# diff, then enable sync. Remove stale Helm release Secrets deliberately (never `helm uninstall`).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-root
+  namespace: argocd
+spec:
+  project: bootstrap
+  source:
+    repoURL: https://gitlab.internal.example/platform/platform-gitops.git
+    targetRevision: main
+    path: argocd/prod/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy: {}
