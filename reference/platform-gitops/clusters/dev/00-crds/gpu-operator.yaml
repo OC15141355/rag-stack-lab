@@ -5,6 +5,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.21.0
   labels:
     managed-by: platform-gitops
@@ -2824,6 +2825,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.17.1
   labels:
     managed-by: platform-gitops
@@ -2909,6 +2911,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.17.1
   labels:
     managed-by: platform-gitops
@@ -3070,6 +3073,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.21.0
   labels:
     managed-by: platform-gitops
@@ -4066,6 +4070,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     managed-by: platform-gitops
@@ -4381,6 +4386,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     managed-by: platform-gitops
@@ -4726,6 +4732,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     managed-by: platform-gitops
@@ -4841,6 +4848,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     controller-gen.kubebuilder.io/version: v0.21.0
   labels:
     managed-by: platform-gitops

@@ -22,6 +22,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render  # noqa: E402  (the one generator: loaders, constants, render-to-temp)
@@ -35,6 +37,10 @@ IMAGE_REF_TEXT = re.compile(r"(?<![\w./-])[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::[0-9]+)
                             r"(?::[A-Za-z0-9._-]+(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})(?![\w.-])")
 # a YAML image/repository key whose value starts with a registry host (charts split refs into repository + tag)
 IMAGE_KEY_TEXT = re.compile(r"(?:^|[{,\s])(?:image|repository)\s*:\s*[\"']?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::[0-9]+)?/")
+# registry with a port but no dot (<host>:<port>/<name>:<tag>); any literal `image:` value in YAML that is not a ${...}
+# placeholder, a CI variable or an object (catches bare names such as busybox:1.36)
+IMAGE_PORT_TEXT = re.compile(r"(?<![\w./-])[a-z0-9-]+:[0-9]+/[a-z0-9._/-]+(?::[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})")
+IMAGE_LITERAL = re.compile(r"(?:^|[{,\s])image\s*:\s*[\"']?(?!\$)[A-Za-z0-9]")
 REVISION_KEY = re.compile(r"(revision|commit|git[-_.]?sha|restartedAt)", re.I)
 WORKLOADS = ("Deployment", "DaemonSet", "StatefulSet", "Job")
 WARN_DAYS = 90
@@ -289,20 +295,38 @@ def c_profiles(ctx):
     return out
 
 
+def evidence_records(root: Path) -> tuple[list[tuple[Path, dict]], list[str]]:
+    """(valid pass records, problems). A record counts as a pass only if result is pass AND its smoke counts say
+    so (failed == 0, passed > 0): a 'pass' with failures is a problem, never evidence."""
+    good, out = [], []
+    for f in sorted((root / "catalogue/evidence").rglob("*.yaml")):
+        r = render.load_yaml(f) or {}
+        rel = f.relative_to(root)
+        if f.parent.name != r.get("env"):
+            out.append(f"{rel}: env {r.get('env')!r} does not match its folder")
+            continue
+        if r.get("result") != "pass":
+            continue
+        sm = r.get("smoke") or {}
+        if sm.get("failed", 1) != 0 or sm.get("passed", 0) <= 0:
+            out.append(f"{rel}: result is pass but smoke counts are {sm} (needs failed 0 and passed > 0)")
+            continue
+        good.append((f, r))
+    return good, out
+
+
+def rec_triple(r: dict) -> tuple:
+    return (r["image_digest"], r.get("profile_id"), r.get("weights_revision"))
+
+
 @check("evidence")
 def c_evidence(ctx):
     """Promotion evidence: an enabled QA block's (image digest, profile_id, weights revision) has a DEV smoke pass
-    recorded in catalogue/evidence/dev/, and an enabled PROD block's has a QA pass in catalogue/evidence/qa/."""
+    recorded in catalogue/evidence/dev/, and an enabled PROD block's has a QA pass in catalogue/evidence/qa/.
+    A pass record must have failed == 0 and passed > 0."""
     _, svcs = catalogue(ctx.root)
-    passes = set()
-    out = []
-    for f in sorted((ctx.root / "catalogue/evidence").rglob("*.yaml")):
-        r = render.load_yaml(f)
-        if f.parent.name != r.get("env"):
-            out.append(f"{f.relative_to(ctx.root)}: env {r.get('env')!r} does not match its folder")
-            continue
-        if r.get("result") == "pass":
-            passes.add((r["service"], r["env"], (r["image_digest"], r.get("profile_id"), r.get("weights_revision"))))
+    good, out = evidence_records(ctx.root)
+    passes = {(r["service"], r["env"], rec_triple(r)) for _, r in good}
     for s in svcs["services"]:
         for env, prev in (("qa", "dev"), ("prod", "qa")):
             b = render.enabled_block(s, env)
@@ -383,7 +407,7 @@ def c_revision(ctx):
 def c_image_refs(ctx):
     """Image references appear only in catalogue/ and the generated clusters/ (not in values, templates, docs, CI)."""
     out = []
-    skip = ("catalogue/", "clusters/", "platform/charts/", "secrets/")
+    skip = ("catalogue/", "clusters/", "platform/charts/", "secrets/", "tests/")   # tests/ holds bad fixtures on purpose
     for p in sorted(ctx.root.rglob("*")):
         rel = p.relative_to(ctx.root).as_posix()
         if not p.is_file() or rel.startswith(skip) or "__pycache__" in rel or p.suffix in (".tgz", ".pyc"):
@@ -397,6 +421,11 @@ def c_image_refs(ctx):
                 out.append(f"{rel}:{i}: image reference {m.group(0)} outside catalogue/ and clusters/")
             if p.suffix in (".yaml", ".yml") and IMAGE_KEY_TEXT.search(line):
                 out.append(f"{rel}:{i}: image repository outside catalogue/ (put the ref in the catalogue)")
+            for m in IMAGE_PORT_TEXT.finditer(line):
+                out.append(f"{rel}:{i}: image reference {m.group(0)} outside catalogue/ and clusters/")
+            if p.suffix in (".yaml", ".yml") and not line.lstrip().startswith("#") \
+                    and IMAGE_LITERAL.search(re.sub(r"\$\{[^}]*\}", "", line.split(" #")[0])):
+                out.append(f"{rel}:{i}: literal image outside catalogue/ (use a ${{image:...}} placeholder)")
     return out
 
 
@@ -478,22 +507,43 @@ def c_nim_ingress(ctx):
     return out
 
 
+def _named_ns(peer: dict) -> bool:
+    if "namespaceSelector" not in peer:
+        return "podSelector" in peer          # pods in the policy's own namespace: in-cluster, explicit
+    ns = peer.get("namespaceSelector") or {}
+    return set(ns.get("matchLabels") or {}) == {"kubernetes.io/metadata.name"} and not ns.get("matchExpressions")
+
+
 @check("airgap-egress")
 def c_airgap_egress(ctx):
-    """In air-gapped envs, service egress goes only to the declared internal ranges (no 0.0.0.0/0 rule)."""
+    """In air-gapped envs every egress rule names its destinations: no rule without `to` (= anywhere); every
+    ipBlock lies inside a declared internal range; in-cluster peers name their namespace explicitly (an empty
+    namespaceSelector means every namespace). DNS to kube-dns is such a named peer."""
+    import ipaddress
     plat, _ = catalogue(ctx.root)
     out = []
     for env in ENVS:
         e = plat["environments"][env]
         if not e["air_gapped"]:
             continue
-        allowed = set(e["internal_ranges"])
+        allowed = [ipaddress.ip_network(c) for c in e["internal_ranges"]]
         for p in objs(ctx.root, env, "NetworkPolicy"):
-            for rule in p["spec"].get("egress", []) or []:
-                for peer in rule.get("to", []):
-                    cidr = (peer.get("ipBlock") or {}).get("cidr")
-                    if cidr and cidr not in allowed:
-                        out.append(f"{env}: NetworkPolicy/{p['metadata']['name']} egress to {cidr} (not an internal range)")
+            n = f"{env}: NetworkPolicy/{p['metadata'].get('namespace')}/{p['metadata']['name']}"
+            for i, rule in enumerate(p["spec"].get("egress", []) or []):
+                if not rule.get("to"):
+                    out.append(f"{n} egress rule {i} has no `to`: it allows every destination")
+                    continue
+                for peer in rule["to"]:
+                    if "ipBlock" in peer:
+                        try:
+                            net = ipaddress.ip_network(peer["ipBlock"].get("cidr", ""))
+                        except ValueError:
+                            out.append(f"{n} egress to an invalid cidr {peer['ipBlock'].get('cidr')!r}")
+                            continue
+                        if not any(net.version == a.version and net.subnet_of(a) for a in allowed):
+                            out.append(f"{n} egress to {net} (not inside the internal ranges {e['internal_ranges']})")
+                    elif not _named_ns(peer):
+                        out.append(f"{n} egress peer {peer} does not name its namespace (kubernetes.io/metadata.name)")
     return out
 
 
@@ -582,8 +632,15 @@ def c_sops(ctx):
             continue
         rel = p.relative_to(ctx.root).as_posix()
         env = p.parent.name
+        if env in ENVS and p.name == "kustomization.yaml":
+            k = render.load_yaml(p) or {}
+            want = sorted(x.name for x in p.parent.glob("*.sops.yaml"))
+            if set(k) != {"apiVersion", "kind", "resources"} or sorted(k.get("resources") or []) != want:
+                out.append(f"{rel}: must be a bare index (apiVersion, kind, resources) of exactly {want}")
+            continue
         if env not in ENVS or not p.name.endswith(".sops.yaml"):
-            out.append(f"{rel}: secrets/ holds only secrets/<env>/*.sops.yaml"); continue
+            out.append(f"{rel}: secrets/ holds only secrets/<env>/*.sops.yaml and its kustomization.yaml index")
+            continue
         d = render.load_yaml(p) or {}
         sops = d.get("sops") or {}
         if not enc.match(str(sops.get("mac", ""))):
@@ -595,6 +652,61 @@ def c_sops(ctx):
         got = {a.get("recipient") for a in sops.get("age", []) or []}
         if got != recips.get(env):
             out.append(f"{rel}: age recipients do not equal the {env} rule's")
+    return out
+
+
+@check("no-yaml-aliases")
+def c_aliases(ctx):
+    """No YAML anchors, aliases or merge keys in the catalogues: an alias shared by two env blocks turns a DEV
+    edit into a silent QA+PROD edit. Every env block is written out in full."""
+    out = []
+    for name in ("catalogue/services.yaml", "catalogue/platform.yaml"):
+        for ev in yaml.parse((ctx.root / name).read_text(), Loader=yaml.SafeLoader):
+            if isinstance(ev, yaml.AliasEvent) or getattr(ev, "anchor", None):
+                out.append(f"{name}:{ev.start_mark.line + 1}: YAML anchor/alias {ev.anchor!r}: write the block out")
+    return out
+
+
+@check("no-prune-foundations")
+def c_foundations(ctx):
+    """Every rendered Namespace and CRD carries argocd sync-options Prune=false,Delete=false: pruning one deletes
+    everything in or of it (every NIMCache, every PVC)."""
+    return [f"{env}/{f}: {o['kind']}/{o['metadata']['name']} lacks Prune=false,Delete=false"
+            for env in ENVS for f, o in rendered(ctx.root, env)
+            if o.get("kind") in render.FOUNDATIONS
+            and (o["metadata"].get("annotations") or {}).get("argocd.argoproj.io/sync-options") != render.NO_PRUNE]
+
+
+@check("weights-verify-gate")
+def c_verify_gate(ctx):
+    """Every NIMService has the weights-verified init container checking ITS weights marker, and every weights PVC
+    has a verify Job in 20-weights/verify/ for the same manifest: no model starts on unverified weights."""
+    out = []
+    for env in ENVS:
+        pvcs = {p["metadata"]["name"]: p for p in objs(ctx.root, env, "PersistentVolumeClaim", "20-weights")}
+        jobs = {}
+        for f, o in rendered(ctx.root, env):
+            if f.startswith("20-weights/verify/") and o.get("kind") == "Job":
+                for v in o["spec"]["template"]["spec"].get("volumes", []):
+                    claim = (v.get("persistentVolumeClaim") or {}).get("claimName")
+                    if claim:
+                        jobs[claim] = " ".join(o["spec"]["template"]["spec"]["containers"][0].get("command", []))
+        for name, pvc in pvcs.items():
+            sha = (pvc["metadata"].get("annotations") or {}).get("platform-gitops/manifest-sha256", "")
+            if name not in jobs:
+                out.append(f"{env}: weights PVC/{name} has no verify Job in 20-weights/verify/")
+            elif not sha or sha not in jobs[name]:
+                out.append(f"{env}: verify Job for PVC/{name} does not check its manifest {sha[:12]}...")
+        caches = {c["metadata"]["name"]: c for c in objs(ctx.root, env, "NIMCache")}
+        for svc in objs(ctx.root, env, "NIMService"):
+            cache = caches.get(svc["spec"].get("storage", {}).get("nimCache", {}).get("name")) or {}
+            pvc = pvcs.get((cache.get("spec", {}).get("storage", {}).get("pvc") or {}).get("name")) or {}
+            sha = (pvc.get("metadata", {}).get("annotations") or {}).get("platform-gitops/manifest-sha256")
+            ic = [c for c in svc["spec"].get("initContainers") or [] if c.get("name") == "weights-verified"]
+            if not ic:
+                out.append(f"{env}: NIMService/{svc['metadata']['name']} has no weights-verified init container")
+            elif not sha or f".verified-{sha}" not in " ".join(ic[0].get("command", [])):
+                out.append(f"{env}: NIMService/{svc['metadata']['name']} init container does not check its weights marker")
     return out
 
 
@@ -636,6 +748,33 @@ def c_delete_weights(ctx):
         gone = {g for g in gone if g[1] != "Job"}   # verify Jobs are recreated freely
         if gone and "delete-weights" not in ctx.labels:
             out += [f"{env}: removes {k}/{n} ({folder}) without the delete-weights label" for folder, k, _, n in sorted(gone)]
+    return out
+
+
+@check("evidence-fresh", needs_base=True)
+def c_evidence_fresh(ctx):
+    """For every QA/PROD block this PR promotes (new or changed against the target branch), the source env's pass
+    record carries the service_hash the CURRENT templates render for that block in the source env
+    (`render.py --service-hash <env> <service>`): the evidence is about exactly what is being promoted."""
+    _, svcs = catalogue(ctx.root)
+    base_svcs = catalogue(ctx.base)[1] if (ctx.base / "catalogue/services.yaml").exists() else {"services": []}
+    base = {s["id"]: s for s in base_svcs["services"]}
+    good, _ = evidence_records(ctx.root)
+    out = []
+    for s in svcs["services"]:
+        for env, prev in (("qa", "dev"), ("prod", "qa")):
+            b = render.enabled_block(s, env)
+            if not b or (s["id"] in base and render.enabled_block(base[s["id"]], env) == b):
+                continue
+            try:
+                want = render.service_hash(ctx.root, prev, s["id"], b)
+            except render.RenderError as e:
+                out.append(f"{s['id']}: cannot recompute the {prev} service hash for the promoted {env} block: {e}")
+                continue
+            recs = [r for _, r in good if r["service"] == s["id"] and r["env"] == prev and rec_triple(r) == triple(b)]
+            if not any(r.get("service_hash") == want for r in recs):
+                out.append(f"{s['id']}: promoted {env} block has no {prev} pass with service_hash {want[:19]}... "
+                           f"(records: {[str(r.get('service_hash'))[:19] for r in recs]}); re-smoke {prev} and record it")
     return out
 
 

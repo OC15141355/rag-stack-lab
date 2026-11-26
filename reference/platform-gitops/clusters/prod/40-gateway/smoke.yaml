@@ -91,3 +91,4 @@ spec:
       - configMap:
           name: bifrost-config
         name: catalogue
+  ttlSecondsAfterFinished: 604800

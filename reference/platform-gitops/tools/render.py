@@ -54,6 +54,8 @@ CLUSTER_KINDS = {"Namespace", "CustomResourceDefinition", "ClusterRole", "Cluste
 KIND_ORDER = ["CustomResourceDefinition", "Namespace", "StorageClass", "ResourceQuota", "NetworkPolicy",
               "ServiceAccount", "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding", "ConfigMap",
               "PersistentVolumeClaim", "Service", "DaemonSet", "Deployment", "Job"]
+FOUNDATIONS = ("Namespace", "CustomResourceDefinition")
+NO_PRUNE = "Prune=false,Delete=false"
 PLACEHOLDER = re.compile(r"\$\{([^}]+)\}")
 REF = re.compile(r"^(?P<name>[a-z0-9.-]+(?::[0-9]+)?(?:/[a-z0-9._-]+)+?)(?::(?P<tag>[A-Za-z0-9._-]+))?"
                  r"@(?P<digest>sha256:[0-9a-f]{64})$")
@@ -252,6 +254,9 @@ def stamp(obj: dict, crd_scopes: dict) -> dict:
     cluster_scoped = kind in CLUSTER_KINDS or crd_scopes.get(kind) == "Cluster"
     if cluster_scoped:
         md.pop("namespace", None)
+    if kind in FOUNDATIONS:
+        # never pruned or deleted by an Argo sync: deleting a Namespace or CRD deletes everything in / of it
+        md.setdefault("annotations", {})["argocd.argoproj.io/sync-options"] = NO_PRUNE
     return obj
 
 
@@ -358,6 +363,7 @@ class EnvRender:
         self.root, self.plat, self.svcs, self.env, self.helm = root, plat, svcs, env, helm
         self.e = plat["environments"][env]
         self.files: dict[str, dict[str, list[dict]]] = {f: {} for f in FOLDERS}
+        self.only_service: str | None = None   # service_hash(): render one service's 30-services file only
         self.sources: dict[str, set[str]] = {}
         self.crd_scopes: dict[str, str] = {}
 
@@ -435,7 +441,7 @@ class EnvRender:
         vref = parse_ref(verify_image)
         for s in sorted(self.svcs["services"], key=lambda s: s["id"]):
             b = enabled_block(s, self.env)
-            if not b:
+            if not b or (self.only_service and s["id"] != self.only_service):
                 continue
             name = slug(s["id"])
             ref = parse_ref(b["image"])
@@ -469,6 +475,9 @@ class EnvRender:
                           "cpu": str(4 * max(1, b["gpus"])), "memory": f"{24 * max(1, b['gpus'])}Gi"})
                 self.add("20-weights", f"{name}.yaml", render_template(t / "weights-pvc.yaml", v),
                          "services/templates/weights-pvc.yaml, catalogue/services.yaml")
+                # applied only AFTER the transfer, by its own step (CI verify:<env>, Argo <env>-weights-verify)
+                self.add("20-weights", f"verify/{name}.yaml", render_template(t / "weights-verify-job.yaml", v),
+                         "services/templates/weights-verify-job.yaml, catalogue/services.yaml")
                 objs = []
                 for f in ("nimcache.yaml", "nimservice.yaml", "networkpolicy-nim.yaml"):
                     objs += render_template(t / f, v)
@@ -592,6 +601,25 @@ def render_hash(texts: dict[str, str]) -> str:
     return "sha256:" + h.hexdigest()
 
 
+def service_hash(root: Path, env: str, service_id: str, block: dict | None = None) -> str:
+    """sha256 of clusters/<env>/30-services/<service>.yaml as rendered from the CURRENT templates, with that
+    service's <env> block replaced by `block` (default: the committed one). An evidence record stores the
+    source env's value at smoke time; checks.py (evidence-fresh) recomputes it for a promoted triple."""
+    plat, svcs = load_catalogue(root)
+    svc = next((s for s in svcs["services"] if s["id"] == service_id), None)
+    if svc is None:
+        raise RenderError(f"no service {service_id!r}")
+    if block is not None:
+        svc["envs"][env] = copy.deepcopy(block)
+    r = EnvRender(root, plat, svcs, env, None)
+    r.only_service = service_id
+    r.services()
+    key = f"30-services/{slug(service_id)}.yaml"
+    if "30-services" not in r.files or f"{slug(service_id)}.yaml" not in r.files["30-services"]:
+        raise RenderError(f"{service_id} is not enabled in {env}")
+    return "sha256:" + sha(r.text(key))
+
+
 def render_all(root: Path = ROOT, envs=ENVS) -> dict[str, dict[str, str]]:
     plat, svcs = load_catalogue(root)
     helm = Helm(plat["tools"]["helm"], plat["tools"]["kube_version"])
@@ -626,7 +654,16 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true", help="fail if clusters/ differs from a fresh render")
     ap.add_argument("--out", type=Path, help="write <out>/<env>/ instead of clusters/")
     ap.add_argument("--root", type=Path, default=ROOT, help="template root (default: this repo)")
+    ap.add_argument("--service-hash", nargs=2, metavar=("ENV", "SERVICE"),
+                    help="print the service hash an evidence record must carry (no helm needed)")
     a = ap.parse_args(argv)
+    if a.service_hash:
+        try:
+            print(service_hash(a.root, *a.service_hash))
+        except RenderError as e:
+            print(f"RENDER ERROR: {e}", file=sys.stderr)
+            return 2
+        return 0
     try:
         rendered = render_all(a.root)
     except (RenderError, KeyError, TypeError) as e:

@@ -7,9 +7,12 @@
 Reports:
   ORPHAN     a live object labelled managed-by=platform-gitops that is NOT in clusters/<env>/ (e.g. a retired
              NIMService still holding 8 GPUs, or a weights PVC whose catalogue entry was removed)
+             Finished Jobs are not orphans: smoke Jobs expire by ttlSecondsAfterFinished.
   UNMANAGED  a live object WITHOUT that label in a managed namespace (a hand-applied change), unless it is owned by
              another object (operator children, ReplicaSets, Pods) or is a Kubernetes default
 Secrets applied from secrets/<env>/*.sops.yaml count as known (their metadata is readable without decryption).
+Secret values never reach this tool: the CI job pipes `kubectl get secrets -o json` through
+`drift.py --strip-secret-data` before anything is written (and load_inventory strips again).
 The other half of drift, live objects that differ from git, is `kubectl diff --server-side -f clusters/<env>/...`
 in the same nightly job. Exit 0 clean, 1 findings, 2 usage error.
 """
@@ -56,13 +59,31 @@ def desired(root: Path, env: str) -> tuple[set, set]:
     return ids, managed_ns
 
 
+def strip_secret_data(data):
+    """Drop every Secret value (data, stringData) from a kubectl List or object: the drift job needs metadata only,
+    and Secret values must never be written to a CI workspace or log."""
+    items = data["items"] if isinstance(data, dict) and "items" in data else data if isinstance(data, list) else [data]
+    for o in items:
+        if isinstance(o, dict):
+            o.pop("data", None)
+            o.pop("stringData", None)
+            ((o.get("metadata") or {}).get("annotations") or {}).pop("kubectl.kubernetes.io/last-applied-configuration", None)
+    return data
+
+
 def load_inventory(path: Path) -> list[dict]:
-    data = json.loads(path.read_text())
+    data = strip_secret_data(json.loads(path.read_text()))   # defensive: never hold Secret values in memory longer
     if isinstance(data, dict) and "items" in data:
         return data["items"]
     if isinstance(data, list):
         return data
     raise ValueError("inventory must be a kubectl List ({'items': [...]}) or a JSON array of objects")
+
+
+def finished_job(o: dict) -> bool:
+    st = o.get("status") or {}
+    conds = {c.get("type") for c in st.get("conditions") or [] if c.get("status") == "True"}
+    return o.get("kind") == "Job" and bool(st.get("succeeded") or st.get("failed") or conds & {"Complete", "Failed"})
 
 
 def report(root: Path, env: str, inventory: list[dict], extra_managed_ns: set | None = None) -> list[dict]:
@@ -73,7 +94,7 @@ def report(root: Path, env: str, inventory: list[dict], extra_managed_ns: set | 
         g, kind, ns, name = i = ident(o)
         md = o.get("metadata", {})
         labelled = (md.get("labels") or {}).get(render.MANAGED_BY[0]) == render.MANAGED_BY[1]
-        if labelled and i not in ids:
+        if labelled and i not in ids and not finished_job(o):   # finished smoke Jobs expire by TTL
             out.append({"type": "ORPHAN", "kind": kind, "namespace": ns, "name": name,
                         "why": "labelled managed-by=platform-gitops but not rendered for this env"})
         elif (not labelled and ns in managed_ns and i not in ids and not md.get("ownerReferences")
@@ -86,11 +107,18 @@ def report(root: Path, env: str, inventory: list[dict], extra_managed_ns: set | 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--env", required=True, choices=render.ENVS)
-    ap.add_argument("--inventory", type=Path, required=True)
+    ap.add_argument("--strip-secret-data", action="store_true",
+                    help="filter: read kubectl JSON on stdin, write it without Secret values to stdout, exit")
+    ap.add_argument("--env", choices=render.ENVS)
+    ap.add_argument("--inventory", type=Path)
     ap.add_argument("--root", type=Path, default=render.ROOT)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    if a.strip_secret_data:
+        json.dump(strip_secret_data(json.load(sys.stdin)), sys.stdout)
+        return 0
+    if not a.env or not a.inventory:
+        ap.error("--env and --inventory are required")
     try:
         findings = report(a.root, a.env, load_inventory(a.inventory))
     except (OSError, ValueError) as e:

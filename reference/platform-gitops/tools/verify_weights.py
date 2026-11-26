@@ -6,7 +6,8 @@
 The tracked transfer puts MANIFEST.sha256 at the PVC root, in `sha256sum` format ("<hex>  <relative path>").
   1. sha256(MANIFEST.sha256) must equal the catalogue's weights.manifest_sha256 (so the manifest is the reviewed one);
   2. every listed file must exist inside the root (no absolute paths, no '..') and hash to its listed value;
-  3. only then is the marker .verified-<manifest_sha256> written; the NIMService init container requires it.
+  3. no file may exist that the manifest does not list (except MANIFEST.sha256 and the markers);
+  4. only then is the marker .verified-<manifest_sha256> written; the NIMService init container requires it.
 Never modifies the weights. Exit 0 verified, 1 mismatch, 2 usage / unreadable manifest.
 """
 from __future__ import annotations
@@ -31,7 +32,7 @@ def verify(root: Path, expected: str) -> list[str]:
     got = file_sha256(manifest)
     if got != expected:
         return [f"MANIFEST.sha256 is {got}, catalogue says {expected}"]
-    problems, n = [], 0
+    problems, n, listed = [], 0, set()
     for i, line in enumerate(manifest.read_text().splitlines(), 1):
         if not line.strip():
             continue
@@ -41,6 +42,7 @@ def verify(root: Path, expected: str) -> list[str]:
         rel = PurePosixPath(m.group(2))
         if rel.is_absolute() or ".." in rel.parts:
             problems.append(f"line {i}: path {rel} escapes the weights root"); continue
+        listed.add(rel.as_posix())
         p = root / rel
         if not p.is_file():
             problems.append(f"{rel}: missing"); continue
@@ -49,6 +51,10 @@ def verify(root: Path, expected: str) -> list[str]:
         n += 1
     if n == 0 and not problems:
         problems.append("manifest lists no files")
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root).as_posix()
+        if p.is_file() and rel != "MANIFEST.sha256" and not rel.startswith(".verified-") and rel not in listed:
+            problems.append(f"{rel}: present but not in the manifest (an unreviewed file would be served)")
     return problems
 
 

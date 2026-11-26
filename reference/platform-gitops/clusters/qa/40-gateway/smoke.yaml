@@ -91,6 +91,7 @@ spec:
       - configMap:
           name: bifrost-config
         name: catalogue
+  ttlSecondsAfterFinished: 604800
 ---
 apiVersion: batch/v1
 kind: Job
@@ -144,3 +145,4 @@ spec:
         runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
+  ttlSecondsAfterFinished: 604800

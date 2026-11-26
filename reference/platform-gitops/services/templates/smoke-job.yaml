@@ -14,6 +14,7 @@ metadata:
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 0
+  ttlSecondsAfterFinished: 604800   # completed smoke Jobs clean themselves up after 7 days (drift ignores finished Jobs)
   activeDeadlineSeconds: "${smoke_deadline}"
   template:
     metadata: {labels: {app: smoke}}

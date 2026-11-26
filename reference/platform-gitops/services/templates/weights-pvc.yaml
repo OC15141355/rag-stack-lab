@@ -1,4 +1,6 @@
-# One PVC per (service, weights revision). Never overwritten: a new revision is a new PVC. The StorageClass has
+# One PVC per (service, weights revision). Flow: PVC (this file) -> tracked transfer (bootstrap/) -> verify Job
+# (weights-verify-job.yaml, rendered to 20-weights/verify/, applied only AFTER the transfer) -> service.
+# Never overwritten: a new revision is a new PVC. The StorageClass has
 # reclaimPolicy Retain (platform/manifests/storage.yaml), and Argo never prunes or deletes it.
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -14,33 +16,3 @@ spec:
   accessModes: ["${access_mode}"]
   storageClassName: "${weights_class}"
   resources: {requests: {storage: "${size}"}}
----
-# Verify Job: checks the transferred files against the catalogue's manifest_sha256 and, only then, writes the
-# marker the NIMService init container requires. Re-run by deleting the Job; it never modifies the weights.
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: "verify-${pvc}"
-  namespace: models
-  labels: {app: weights-verify, platform-gitops/service: "${service_label}"}
-spec:
-  backoffLimit: 0
-  activeDeadlineSeconds: 21600
-  template:
-    metadata: {labels: {app: weights-verify}}
-    spec:
-      restartPolicy: Never
-      automountServiceAccountToken: false
-      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 2000, seccompProfile: {type: RuntimeDefault}}
-      containers:
-        - name: verify
-          image: "${verify_image}"
-          command: ["python3", "/tools/verify_weights.py", "--root", "/weights", "--manifest-sha256", "${manifest_sha256}"]
-          resources: {requests: {cpu: 500m, memory: 256Mi}, limits: {memory: 512Mi}}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
-          volumeMounts:
-            - {name: weights, mountPath: /weights}
-            - {name: tools, mountPath: /tools, readOnly: true}
-      volumes:
-        - {name: weights, persistentVolumeClaim: {claimName: "${pvc}"}}
-        - {name: tools, configMap: {name: weights-verify}}
