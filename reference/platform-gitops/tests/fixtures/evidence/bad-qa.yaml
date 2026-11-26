@@ -1,4 +1,4 @@
-# evidence: bad-qa fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# evidence: bad-qa fixture (applied to a copy of the template by tests/test_checks.py)
 description: QA promoted to N+1 without a DEV pass for N+1
 expect: fail
 ops:

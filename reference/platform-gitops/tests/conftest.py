@@ -1,4 +1,4 @@
-"""Shared helpers for the reference/platform-gitops template tests (design section 13)."""
+"""Shared helpers for this template's own tests (run: python3 -m pytest -q tests)."""
 from __future__ import annotations
 
 import copy
@@ -12,8 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-REPO = Path(__file__).resolve().parents[2]
-TEMPLATE = REPO / "reference/platform-gitops"
+TEMPLATE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(TEMPLATE / "tools"))
 
@@ -38,7 +37,7 @@ def need_helm():
 
 
 def copy_template(dst: Path) -> Path:
-    shutil.copytree(TEMPLATE, dst, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(TEMPLATE, dst, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".ruff_cache"))
     return dst
 
 

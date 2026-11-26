@@ -1,0 +1,12 @@
+# sops-recipients: bad-index fixture (applied to a copy of the template by tests/test_checks.py)
+description: the env's kustomization index misses a SOPS file (it would never be applied)
+expect: fail
+ops:
+- file: secrets/dev/kustomization.yaml
+  write: 'apiVersion: kustomize.config.k8s.io/v1beta1
+
+    kind: Kustomization
+
+    resources: [bifrost-env.sops.yaml]
+
+    '

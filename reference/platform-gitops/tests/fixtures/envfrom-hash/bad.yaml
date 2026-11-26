@@ -1,4 +1,4 @@
-# envfrom-hash: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# envfrom-hash: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: envFrom Secret without its hash annotation (Secret changes would not restart the pod)
 expect: fail
 ops:

@@ -1,4 +1,4 @@
-# digests-only: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# digests-only: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: catalogue image pinned by tag only
 expect: fail
 ops:

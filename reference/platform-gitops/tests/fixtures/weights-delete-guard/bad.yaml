@@ -1,4 +1,4 @@
-# weights-delete-guard: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# weights-delete-guard: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: removing a service from DEV drops its NIMCache and weights PVC, no label
 expect: fail
 pair: true

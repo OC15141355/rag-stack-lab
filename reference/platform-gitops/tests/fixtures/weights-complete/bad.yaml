@@ -1,4 +1,4 @@
-# weights-complete: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# weights-complete: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: weights without manifest_sha256
 expect: fail
 ops:

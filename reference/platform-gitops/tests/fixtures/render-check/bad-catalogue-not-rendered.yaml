@@ -1,4 +1,4 @@
-# render-check: bad-catalogue-not-rendered fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# render-check: bad-catalogue-not-rendered fixture (applied to a copy of the template by tests/test_checks.py)
 description: catalogue edited but clusters/ not regenerated
 expect: fail
 ops:

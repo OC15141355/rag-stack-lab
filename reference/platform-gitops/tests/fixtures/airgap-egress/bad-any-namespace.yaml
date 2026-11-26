@@ -1,0 +1,16 @@
+# airgap-egress: bad-any-namespace fixture (applied to a copy of the template by tests/test_checks.py)
+description: egress to an empty namespaceSelector (every namespace)
+expect: fail
+ops:
+- file: clusters/qa/40-gateway/bifrost.yaml
+  doc:
+    kind: NetworkPolicy
+    name: bifrost
+  set:
+  - spec
+  - egress
+  - 0
+  - to
+  - 0
+  value:
+    namespaceSelector: {}

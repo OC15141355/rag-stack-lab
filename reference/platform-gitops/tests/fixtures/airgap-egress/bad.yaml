@@ -1,4 +1,4 @@
-# airgap-egress: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# airgap-egress: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: public egress in air-gapped QA
 expect: fail
 ops:

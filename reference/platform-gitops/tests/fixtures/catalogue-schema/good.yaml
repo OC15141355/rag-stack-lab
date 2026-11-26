@@ -1,4 +1,4 @@
-# catalogue-schema: good fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# catalogue-schema: good fixture (applied to a copy of the template by tests/test_checks.py)
 description: the template as committed
 expect: pass
 ops: []

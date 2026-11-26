@@ -1,4 +1,4 @@
-# profile-ids: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# profile-ids: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: a versioned profile name instead of the 64-hex ID
 expect: fail
 ops:

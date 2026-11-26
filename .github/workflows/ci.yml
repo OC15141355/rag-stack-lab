@@ -48,7 +48,7 @@ jobs:
         run: uv run --with pyyaml python3 reference/platform-gitops/tools/render.py --check
       - name: platform-gitops reference - gates
         run: uv run --with pyyaml --with jsonschema python3 reference/platform-gitops/tools/checks.py
-      - name: platform-gitops reference - PR gates (one env per PR, weights delete guard)
+      - name: platform-gitops reference - PR gates (one env per PR, weights delete guard, fresh evidence)
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -57,7 +57,7 @@ jobs:
           if git cat-file -e "origin/$BASE_REF:reference/platform-gitops/clusters" 2>/dev/null; then
             git worktree add "$RUNNER_TEMP/base" "origin/$BASE_REF"
             uv run --with pyyaml --with jsonschema python3 reference/platform-gitops/tools/checks.py \
-              --base "$RUNNER_TEMP/base/reference/platform-gitops" --labels "$LABELS" --only one-env-per-pr,weights-delete-guard
+              --base "$RUNNER_TEMP/base/reference/platform-gitops" --labels "$LABELS" --only one-env-per-pr,weights-delete-guard,evidence-fresh
           else
             echo "base branch has no reference/platform-gitops yet: nothing to compare (PR gates not applicable)"
           fi

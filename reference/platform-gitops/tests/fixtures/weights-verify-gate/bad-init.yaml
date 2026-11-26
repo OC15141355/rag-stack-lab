@@ -1,0 +1,11 @@
+# weights-verify-gate: bad-init fixture (applied to a copy of the template by tests/test_checks.py)
+description: a NIMService without the weights-verified init container
+expect: fail
+ops:
+- file: clusters/prod/30-services/chat-glm.yaml
+  doc:
+    kind: NIMService
+    name: chat-glm
+  unset:
+  - spec
+  - initContainers

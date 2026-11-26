@@ -1,4 +1,4 @@
-# sops-recipients: bad-plaintext fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# sops-recipients: bad-plaintext fixture (applied to a copy of the template by tests/test_checks.py)
 description: a plaintext Secret under secrets/
 expect: fail
 ops:

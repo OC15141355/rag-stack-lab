@@ -3,7 +3,7 @@
 # against tests/reference/health/*.yaml. Needs the argocd CLI.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-cm=reference/platform-gitops/argocd/config/argocd-cm.yaml dir=tests/reference/health
+cm=reference/platform-gitops/argocd/config/argocd-cm.yaml dir=reference/platform-gitops/tests/health
 fail=0
 nfix=$(ls "$dir"/*.yaml | wc -l | tr -d ' ')
 nexp=$(grep -c . "$dir/expected.txt")

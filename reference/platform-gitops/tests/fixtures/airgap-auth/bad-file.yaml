@@ -1,4 +1,4 @@
-# airgap-auth: bad-file fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# airgap-auth: bad-file fixture (applied to a copy of the template by tests/test_checks.py)
 description: an NGC key file for air-gapped QA
 expect: fail
 ops:

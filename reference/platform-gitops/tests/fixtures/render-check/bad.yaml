@@ -1,4 +1,4 @@
-# render-check: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# render-check: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: clusters/ hand-edited (a rate limit changed in the generated gateway config)
 expect: fail
 ops:

@@ -1,4 +1,4 @@
-# image-refs-location: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# image-refs-location: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: an image repository in a values file
 expect: fail
 ops:

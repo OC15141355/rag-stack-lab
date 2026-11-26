@@ -1,4 +1,4 @@
-# crd-schema: bad-type fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# crd-schema: bad-type fixture (applied to a copy of the template by tests/test_checks.py)
 description: NIMService initContainer image given as a string (the CRD wants {repository, tag})
 expect: fail
 ops:

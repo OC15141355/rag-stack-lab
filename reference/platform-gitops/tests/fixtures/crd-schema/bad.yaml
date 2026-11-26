@@ -1,4 +1,4 @@
-# crd-schema: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# crd-schema: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: unknown field in a NIMService (readonly instead of readOnly) - the API server would prune it
 expect: fail
 ops:

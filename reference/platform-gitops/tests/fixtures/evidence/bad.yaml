@@ -1,4 +1,4 @@
-# evidence: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# evidence: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: PROD runs a triple with no recorded QA pass
 expect: fail
 ops:

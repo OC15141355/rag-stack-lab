@@ -1,0 +1,11 @@
+# no-prune-foundations: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: the models Namespace could be pruned (and every NIMCache/PVC in it with it)
+expect: fail
+ops:
+- file: clusters/prod/10-platform/namespaces.yaml
+  doc:
+    kind: Namespace
+    name: models
+  unset:
+  - metadata
+  - annotations

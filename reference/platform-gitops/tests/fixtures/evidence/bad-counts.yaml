@@ -1,0 +1,9 @@
+# evidence: bad-counts fixture (applied to a copy of the template by tests/test_checks.py)
+description: a record says pass but the smoke had a failure
+expect: fail
+ops:
+- file: catalogue/evidence/qa/chat-glm-2026-11-21.yaml
+  set:
+  - smoke
+  - failed
+  value: 1

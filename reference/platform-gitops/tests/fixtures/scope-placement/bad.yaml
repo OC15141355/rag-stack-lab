@@ -1,4 +1,4 @@
-# scope-placement: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# scope-placement: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: a ClusterRole in 30-services
 expect: fail
 ops:

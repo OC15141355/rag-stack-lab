@@ -1,4 +1,4 @@
-# airgap-auth: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# airgap-auth: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: NGC authSecret on a NIMService in air-gapped PROD
 expect: fail
 ops:

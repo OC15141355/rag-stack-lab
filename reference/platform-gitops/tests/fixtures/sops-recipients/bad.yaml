@@ -1,4 +1,4 @@
-# sops-recipients: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# sops-recipients: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: the PROD file copied into QA (wrong recipient)
 expect: fail
 ops:

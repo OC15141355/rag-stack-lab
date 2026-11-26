@@ -1,4 +1,4 @@
-# digests-only: bad-rendered fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# digests-only: bad-rendered fixture (applied to a copy of the template by tests/test_checks.py)
 description: a rendered container image by tag
 expect: fail
 ops:

@@ -1,0 +1,6 @@
+# weights-verify-gate: bad fixture (applied to a copy of the template by tests/test_checks.py)
+description: a weights PVC with no verify Job
+expect: fail
+ops:
+- file: clusters/prod/20-weights/verify/chat-glm.yaml
+  delete: true

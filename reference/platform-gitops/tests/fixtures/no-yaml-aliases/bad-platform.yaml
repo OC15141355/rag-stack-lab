@@ -1,0 +1,8 @@
+# no-yaml-aliases: bad-platform fixture (applied to a copy of the template by tests/test_checks.py)
+description: an anchored env block in platform.yaml
+expect: fail
+ops:
+- file: catalogue/platform.yaml
+  replace:
+  - "    envs:\n      dev:\n        chart: gpu-operator"
+  - "    envs:\n      dev: &gpu\n        chart: gpu-operator"

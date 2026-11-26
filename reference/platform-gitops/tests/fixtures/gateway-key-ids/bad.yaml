@@ -1,4 +1,4 @@
-# gateway-key-ids: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# gateway-key-ids: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: empty key_ids (schema-valid; config v2 then denies every key)
 expect: fail
 ops:

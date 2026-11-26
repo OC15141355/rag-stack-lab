@@ -1,4 +1,4 @@
-# nim-cache-writable: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# nim-cache-writable: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: read-only NIM cache (schema-valid, fails at runtime)
 expect: fail
 ops:

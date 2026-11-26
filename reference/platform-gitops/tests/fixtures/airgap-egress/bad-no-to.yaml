@@ -1,0 +1,15 @@
+# airgap-egress: bad-no-to fixture (applied to a copy of the template by tests/test_checks.py)
+description: an egress rule without `to` allows every destination
+expect: fail
+ops:
+- file: clusters/qa/30-services/chat-glm.yaml
+  doc:
+    kind: NetworkPolicy
+    name: chat-glm
+  set:
+  - spec
+  - egress
+  - 1
+  value:
+    ports:
+    - port: 443

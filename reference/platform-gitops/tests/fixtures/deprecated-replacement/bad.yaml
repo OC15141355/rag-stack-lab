@@ -1,4 +1,4 @@
-# deprecated-replacement: bad fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# deprecated-replacement: bad fixture (applied to a copy of the template by tests/test_checks.py)
 description: deprecated without a replacement
 expect: fail
 ops:

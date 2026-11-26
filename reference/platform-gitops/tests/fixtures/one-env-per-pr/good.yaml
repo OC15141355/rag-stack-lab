@@ -1,4 +1,4 @@
-# one-env-per-pr: good fixture (applied to a copy of reference/platform-gitops by tests/reference/test_checks.py)
+# one-env-per-pr: good fixture (applied to a copy of the template by tests/test_checks.py)
 description: a DEV-only change (rate limit) re-rendered
 expect: pass
 pair: true
