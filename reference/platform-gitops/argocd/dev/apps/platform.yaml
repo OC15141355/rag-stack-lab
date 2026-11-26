@@ -1,4 +1,4 @@
-# Child of dev-root (wave 1). Watches only clusters/dev/10-platform. DEV: automated sync.
+# Child of dev-root. Watches only clusters/dev/10-platform. DEV: automated, wave 1.
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

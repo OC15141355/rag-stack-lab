@@ -10,12 +10,13 @@
 #     "required approvals" on prod-platform for the two-person rule; on CE, the allowed-to-deploy list is the
 #     control and the second person is the merge approver (record it; CE cannot enforce it);
 #   - protected, masked CI/CD variables (file type): KUBECONFIG_<ENV>_SERVICES (a namespace-scoped ServiceAccount
-#     in models + gateway, no RBAC verbs) and KUBECONFIG_<ENV>_PLATFORM (cluster-admin, short-lived: rotate per use);
+#     in models + gateway, no RBAC verbs), KUBECONFIG_<ENV>_PLATFORM (cluster-admin, short-lived: re-issued per use)
+#     and SOPS_AGE_KEY_<ENV> (that environment's age key; only its runner can read it);
 #   - PLATFORM_TOOLS_IMAGE: a protected variable holding the digest-pinned tools image (python3 + PyYAML +
 #     jsonschema + kubectl + the pinned helm + gitleaks). Image refs live only in catalogue/ and clusters/; the
 #     variable's value is reviewed like a catalogue entry (catalogue/platform.yaml ci-runners).
 
-stages: [gates, deploy-platform, deploy-weights, deploy-services, drift]
+stages: [gates, deploy-platform, deploy-weights, verify-weights, deploy-services, prune, drift]
 
 workflow:
   rules:
@@ -53,7 +54,16 @@ gates:pr-checks:
   script:
     - git fetch --depth=1 origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - git worktree add /tmp/base FETCH_HEAD
-    - python3 tools/checks.py --base /tmp/base --labels "${CI_MERGE_REQUEST_LABELS:-}" --only one-env-per-pr,weights-delete-guard
+    - python3 tools/checks.py --base /tmp/base --labels "${CI_MERGE_REQUEST_LABELS:-}" --only one-env-per-pr,weights-delete-guard,evidence-fresh
+
+gates:tests:
+  # the template's own test suite: every gate against its good and bad fixtures (needs the pinned helm)
+  stage: gates
+  tags: [gates-runner]
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - REQUIRE_HELM=1 python3 -m pytest -q tests
 
 gates:secrets:
   stage: gates
@@ -65,20 +75,12 @@ gates:secrets:
     - python3 tools/checks.py --only sops-recipients
 
 # ------------------------------------------------------------------ deploy (main only, never MR pipelines)
-.on-main-auto:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
-      when: on_success
-
-.on-main-manual:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
-      when: manual
-      allow_failure: false
+# Order inside one pipeline is the stage order: platform -> weights -> verify-weights -> services -> prune.
+# Platform and verify jobs appear only when their folder changed, are manual and BLOCK the pipeline
+# (allow_failure: false) until someone runs them, so a services job can never run before them.
+.manual-blocking: &manual-blocking
+  when: manual
+  allow_failure: false
 
 # Layer B: cluster-scoped, so cluster-admin credentials: MANUAL in every environment, two-person, ordered passes
 # (CRDs established before anything that uses them; never one mixed apply). Helm hooks are not run: CRD upgrades
@@ -95,67 +97,150 @@ gates:secrets:
     - kubectl -n gpu-operator rollout status deployment/gpu-operator --timeout=600s
 
 platform:dev:
-  extends: [.platform, .on-main-manual]
+  extends: [.platform]
   tags: [dev-runner]
   environment: {name: dev-platform, deployment_tier: development}
   variables: {ENV: dev, KUBECONFIG_PLATFORM: $KUBECONFIG_DEV_PLATFORM}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/dev/00-crds/**/*, clusters/dev/10-platform/**/*]
+      <<: *manual-blocking
 
 platform:qa:
-  extends: [.platform, .on-main-manual]
+  extends: [.platform]
   tags: [qa-runner]
   environment: {name: qa-platform, deployment_tier: testing}
   variables: {ENV: qa, KUBECONFIG_PLATFORM: $KUBECONFIG_QA_PLATFORM}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/qa/00-crds/**/*, clusters/qa/10-platform/**/*]
+      <<: *manual-blocking
 
 platform:prod:
-  extends: [.platform, .on-main-manual]
+  extends: [.platform]
   tags: [prod-runner]
   environment: {name: prod-platform, deployment_tier: production}
   variables: {ENV: prod, KUBECONFIG_PLATFORM: $KUBECONFIG_PROD_PLATFORM}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/prod/00-crds/**/*, clusters/prod/10-platform/**/*]
+      <<: *manual-blocking
 
-# Weights: namespace-scoped (models). Outside the services chain so a 1.5 TB verify never blocks a gateway fix.
+# Weights, step 1 of 3: create the PVCs (+ the verify script). Namespace-scoped. Not recursive: verify/ is step 3.
+# Step 2 is the tracked transfer into each new PVC (bootstrap/, outside CI).
 .weights:
   stage: deploy-weights
   resource_group: weights-$ENV
-  needs: []
   script:
     - export KUBECONFIG="$KUBECONFIG_SERVICES"
     - kubectl apply --server-side -f "clusters/$ENV/20-weights/"
-    - kubectl -n models wait --for=condition=complete job -l app=weights-verify --timeout=21600s
 
 weights:dev:
-  extends: [.weights, .on-main-auto]
+  extends: [.weights]
   tags: [dev-runner]
   environment: {name: dev, deployment_tier: development}
   variables: {ENV: dev, KUBECONFIG_SERVICES: $KUBECONFIG_DEV_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/dev/20-weights/**/*]
+      when: on_success
 
 weights:qa:
-  extends: [.weights, .on-main-manual]
+  extends: [.weights]
   tags: [qa-runner]
   environment: {name: qa, deployment_tier: testing}
   variables: {ENV: qa, KUBECONFIG_SERVICES: $KUBECONFIG_QA_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/qa/20-weights/**/*]
+      <<: *manual-blocking
 
 weights:prod:
-  extends: [.weights, .on-main-manual]
+  extends: [.weights]
   tags: [prod-runner]
   environment: {name: prod, deployment_tier: production}
   variables: {ENV: prod, KUBECONFIG_SERVICES: $KUBECONFIG_PROD_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/prod/20-weights/**/*]
+      <<: *manual-blocking
 
-# Layer A: 30-services + 40-gateway as a NAMESPACE-SCOPED ServiceAccount (no cluster resources, no RBAC verbs).
-# Automatic after a merge for DEV, manual for QA and PROD. Refuses to start a model whose weights are unverified,
-# then runs the smoke Job (the evidence for the next promotion) and keeps its report as an artifact.
+# Weights, step 3 of 3: run ONLY after the transfer finished (a person starts it). Fails fast on a failed Job.
+.verify:
+  stage: verify-weights
+  resource_group: weights-$ENV
+  script:
+    - export KUBECONFIG="$KUBECONFIG_SERVICES"
+    - kubectl apply --server-side -f "clusters/$ENV/20-weights/verify/"
+    - python3 tools/wait_jobs.py -f "clusters/$ENV/20-weights/verify/" --timeout 21600
+
+verify:dev:
+  extends: [.verify]
+  tags: [dev-runner]
+  environment: {name: dev, deployment_tier: development}
+  variables: {ENV: dev, KUBECONFIG_SERVICES: $KUBECONFIG_DEV_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/dev/20-weights/**/*]
+      <<: *manual-blocking
+
+verify:qa:
+  extends: [.verify]
+  tags: [qa-runner]
+  environment: {name: qa, deployment_tier: testing}
+  variables: {ENV: qa, KUBECONFIG_SERVICES: $KUBECONFIG_QA_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/qa/20-weights/**/*]
+      <<: *manual-blocking
+
+verify:prod:
+  extends: [.verify]
+  tags: [prod-runner]
+  environment: {name: prod, deployment_tier: production}
+  variables: {ENV: prod, KUBECONFIG_SERVICES: $KUBECONFIG_PROD_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/prod/20-weights/**/*]
+      <<: *manual-blocking
+
+# Layer A: Secrets + 30-services + 40-gateway as a NAMESPACE-SCOPED ServiceAccount (no cluster resources, no RBAC
+# verbs). Automatic after a merge for DEV, manual for QA and PROD. Secrets are decrypted on this env's runner with
+# this env's age key and piped straight to the API server: plaintext never touches the disk or the log.
+# Refuses to start a model whose weights are unverified, then runs the smoke Job (the evidence for the next
+# promotion) and keeps its report as an artifact.
 .services:
   stage: deploy-services
   resource_group: services-$ENV
-  needs: []
   script:
-    - export KUBECONFIG="$KUBECONFIG_SERVICES"
-    - kubectl -n models wait --for=condition=complete job -l app=weights-verify --timeout=60s
+    - set -o pipefail
+    - export KUBECONFIG="$KUBECONFIG_SERVICES" SOPS_AGE_KEY_FILE="$SOPS_AGE_KEY"
+    - for f in secrets/$ENV/*.sops.yaml; do sops --decrypt "$f" | kubectl apply --server-side -f - >/dev/null || exit 1; done
+    - python3 tools/wait_jobs.py -l app=weights-verify -n models --timeout 60
     - kubectl apply --server-side -f "clusters/$ENV/30-services/"
     - kubectl -n models wait --for=jsonpath='{.status.state}'=Ready nimservice --all --timeout=3600s
     - for f in clusters/$ENV/40-gateway/*.yaml; do [ "$(basename "$f")" = smoke.yaml ] || kubectl apply --server-side -f "$f" || exit 1; done
     - kubectl -n gateway rollout status deployment/bifrost --timeout=300s
     - kubectl apply --server-side -f "clusters/$ENV/40-gateway/smoke.yaml"
-    - kubectl wait --for=condition=complete -f "clusters/$ENV/40-gateway/smoke.yaml" --timeout=3600s
+    - python3 tools/wait_jobs.py -f "clusters/$ENV/40-gateway/smoke.yaml" --timeout 3600
   after_script:   # the smoke report is kept whether the smoke passed or failed
     - export KUBECONFIG="$KUBECONFIG_SERVICES"
     - for j in $(kubectl get -f "clusters/$ENV/40-gateway/smoke.yaml" -o name); do kubectl -n gateway logs "$j" --all-containers; done > smoke-report.txt
@@ -165,33 +250,105 @@ weights:prod:
     expire_in: 90 days
 
 services:dev:
-  extends: [.services, .on-main-auto]
+  extends: [.services]
+  tags: [dev-runner]
+  environment: {name: dev, deployment_tier: development}
+  variables: {ENV: dev, KUBECONFIG_SERVICES: $KUBECONFIG_DEV_SERVICES, SOPS_AGE_KEY: $SOPS_AGE_KEY_DEV}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: on_success
+
+services:qa:
+  extends: [.services]
+  tags: [qa-runner]
+  environment: {name: qa, deployment_tier: testing}
+  variables: {ENV: qa, KUBECONFIG_SERVICES: $KUBECONFIG_QA_SERVICES, SOPS_AGE_KEY: $SOPS_AGE_KEY_QA}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      <<: *manual-blocking
+
+services:prod:
+  extends: [.services]
+  tags: [prod-runner]
+  environment: {name: prod, deployment_tier: production}
+  variables: {ENV: prod, KUBECONFIG_SERVICES: $KUBECONFIG_PROD_SERVICES, SOPS_AGE_KEY: $SOPS_AGE_KEY_PROD}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      <<: *manual-blocking
+
+# Explicit deletes: `kubectl apply` never removes anything, so a retired service would keep its GPUs. This lists
+# what the merge removed from 30-services/40-gateway (tools/prune.py, previous commit vs this one) and deletes it.
+# NIMCaches, PVCs and 20-weights are deleted ONLY when the person running the job sets DELETE_WEIGHTS=true, after
+# the PR passed the delete-weights gate. Manual in every environment; output is the reviewed delete list.
+.prune:
+  stage: prune
+  resource_group: services-$ENV
+  variables: {GIT_DEPTH: "0"}
+  script:
+    - set -o pipefail
+    - export KUBECONFIG="$KUBECONFIG_SERVICES"
+    - git worktree add /tmp/prev "$CI_COMMIT_BEFORE_SHA"
+    - python3 tools/prune.py --base /tmp/prev --env "$ENV" $([ "${DELETE_WEIGHTS:-}" = true ] && echo --allow-weights) | tee delete-list.txt
+    - while read -r ns res; do kubectl -n "$ns" delete "$res" --wait=false || exit 1; done < delete-list.txt
+  artifacts:
+    paths: [delete-list.txt]
+
+prune:dev:
+  extends: [.prune]
   tags: [dev-runner]
   environment: {name: dev, deployment_tier: development}
   variables: {ENV: dev, KUBECONFIG_SERVICES: $KUBECONFIG_DEV_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/dev/20-weights/**/*, clusters/dev/30-services/**/*, clusters/dev/40-gateway/**/*]
+      when: manual
 
-services:qa:
-  extends: [.services, .on-main-manual]
+prune:qa:
+  extends: [.prune]
   tags: [qa-runner]
   environment: {name: qa, deployment_tier: testing}
   variables: {ENV: qa, KUBECONFIG_SERVICES: $KUBECONFIG_QA_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/qa/20-weights/**/*, clusters/qa/30-services/**/*, clusters/qa/40-gateway/**/*]
+      when: manual
 
-services:prod:
-  extends: [.services, .on-main-manual]
+prune:prod:
+  extends: [.prune]
   tags: [prod-runner]
   environment: {name: prod, deployment_tier: production}
   variables: {ENV: prod, KUBECONFIG_SERVICES: $KUBECONFIG_PROD_SERVICES}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [clusters/prod/20-weights/**/*, clusters/prod/30-services/**/*, clusters/prod/40-gateway/**/*]
+      when: manual
 
 # ------------------------------------------------------------------ nightly drift (schedules only, read-only)
+# Secret VALUES never reach the workspace: secrets are listed through drift.py --strip-secret-data in a pipe.
 .drift:
   stage: drift
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   script:
+    - set -o pipefail
     - export KUBECONFIG="$KUBECONFIG_SERVICES"
-    - kubectl get nimservices,nimcaches,deployments,services,configmaps,secrets,persistentvolumeclaims,networkpolicies,jobs -n models -o json > models.json
-    - kubectl get deployments,services,configmaps,secrets,persistentvolumeclaims,networkpolicies,jobs -n gateway -o json > gateway.json
-    - python3 -c "import json; a=json.load(open('models.json')); a['items']+=json.load(open('gateway.json'))['items']; json.dump(a, open('inventory.json','w'))"
+    - kubectl get nimservices,nimcaches,deployments,services,configmaps,persistentvolumeclaims,networkpolicies,jobs -n models -o json > models.json
+    - kubectl get deployments,services,configmaps,persistentvolumeclaims,networkpolicies,jobs -n gateway -o json > gateway.json
+    - kubectl get secrets -n models -o json | python3 tools/drift.py --strip-secret-data > secrets-models.json
+    - kubectl get secrets -n gateway -o json | python3 tools/drift.py --strip-secret-data > secrets-gateway.json
+    - python3 -c "import json,sys; a={'items':[]}; [a['items'].extend(json.load(open(f))['items']) for f in sys.argv[1:]]; json.dump(a, open('inventory.json','w'))" models.json gateway.json secrets-models.json secrets-gateway.json
     - python3 tools/drift.py --env "$ENV" --inventory inventory.json
     - rc=0; for d in 20-weights 30-services 40-gateway; do kubectl diff --server-side -f "clusters/$ENV/$d/" || rc=1; done; exit $rc
 

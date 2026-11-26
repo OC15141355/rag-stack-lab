@@ -50,7 +50,7 @@ metadata:
   name: services
   namespace: argocd
 spec:
-  description: 'Layer A: weights, models, gateway. Namespace-scoped only: no cluster resources, no RBAC.'
+  description: 'Layer A: secrets, weights, models, gateway. Namespace-scoped only: no cluster resources, no RBAC.'
   sourceRepos:
   - https://gitlab.internal.example/platform/platform-gitops.git
   destinations:
@@ -76,7 +76,7 @@ metadata:
   name: bootstrap
   namespace: argocd
 spec:
-  description: Only the per-env app-of-apps and the weights app (hand-applied).
+  description: Only the per-env app-of-apps and the hand-applied weights apps.
   sourceRepos:
   - https://gitlab.internal.example/platform/platform-gitops.git
   destinations:

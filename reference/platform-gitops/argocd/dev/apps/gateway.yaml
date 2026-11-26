@@ -1,4 +1,4 @@
-# Child of dev-root (wave 3). Watches only clusters/dev/40-gateway. DEV: automated sync.
+# Child of dev-root. Watches only clusters/dev/40-gateway. DEV: automated, wave 4.
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -6,7 +6,7 @@ metadata:
   name: dev-gateway
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: '3'
+    argocd.argoproj.io/sync-wave: '4'
   finalizers:
   - resources-finalizer.argocd.argoproj.io
 spec:

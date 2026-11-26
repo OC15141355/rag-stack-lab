@@ -1,0 +1,30 @@
+# Merged by bootstrap/ into Argo CD's repo-server as a sidecar Config Management Plugin (the shape proven in
+# rag-stack-lab's lab/argocd). It decrypts secrets/<env>/*.sops.yaml with THIS cluster's age key only and builds the
+# kustomization index. The guard admits only the <env>-secrets Application reading secrets/<env>, so no other
+# app can use the key. Fail closed: any decrypt failure fails the render (no partial Secrets).
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cmp-plugin, namespace: argocd}
+data:
+  sops-kustomize.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata: {name: sops-kustomize}
+    spec:
+      allowConcurrency: true
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            case "$ARGOCD_APP_NAME:$ARGOCD_APP_SOURCE_PATH" in
+              argocd_dev-secrets:secrets/dev|argocd_qa-secrets:secrets/qa|argocd_prod-secrets:secrets/prod|dev-secrets:secrets/dev|qa-secrets:secrets/qa|prod-secrets:secrets/prod) ;;
+              *) echo "sops-kustomize: not permitted for $ARGOCD_APP_NAME ($ARGOCD_APP_SOURCE_PATH)" >&2; exit 1 ;;
+            esac
+            for f in $(find . -type f -name "*.sops.yaml"); do
+              if ! err=$(sops --decrypt --in-place "$f" 2>&1); then
+                echo "sops decrypt FAILED for $f: $err" >&2; exit 1
+              fi
+            done
+            kustomize build .
+      lockRepo: false

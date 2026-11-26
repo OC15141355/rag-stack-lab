@@ -1,5 +1,6 @@
-# HAND-APPLIED app-of-apps for the dev cluster: crds (0) -> platform (1) -> services (2) -> gateway (3).
-# Waves on Applications wait for Application health (argocd/config/argocd-cm.yaml). Weights: see weights.yaml.
+# HAND-APPLIED app-of-apps for the dev cluster.
+# DEV: automated; children carry waves crds 0 -> platform 1 -> secrets 2 -> services 3 -> gateway 4, and a wave
+# waits for the previous child Application to be Healthy (health check in argocd/config/argocd-cm.yaml).
 # Handover from CI apply (design section 7): disable this env's CI apply jobs, first sync with prune false, review the
 # diff, then enable sync. Remove stale Helm release Secrets deliberately (never `helm uninstall`).
 ---

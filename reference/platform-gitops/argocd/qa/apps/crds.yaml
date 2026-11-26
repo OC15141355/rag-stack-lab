@@ -1,12 +1,12 @@
-# Child of qa-root (wave 0). Watches only clusters/qa/00-crds. QA: MANUAL sync, inside the project's sync window only.
+# Child of qa-root. Watches only clusters/qa/00-crds. QA: MANUAL sync inside the sync window, no wave: sync the children by hand in order
+# crds -> platform -> secrets -> weights -> (transfer, bootstrap/) -> weights-verify -> services -> gateway (README 'Syncing QA and PROD').
+# Prune is a manual, reviewed sync (Prune checkbox) after the PR that removed the objects merged.
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: qa-crds
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: '0'
   finalizers:
   - resources-finalizer.argocd.argoproj.io
 spec:

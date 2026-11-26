@@ -1,4 +1,4 @@
-# One age recipient per environment: a runner (or Argo KSOPS) holding only the QA key can never decrypt PROD.
+# One age recipient per environment: a runner (or the Argo SOPS plugin) holding only the QA key can never decrypt PROD.
 # EXAMPLE recipients: throwaway keys whose private halves were deleted when the example files were made, so the
 # committed secrets/ files are undecryptable placeholders. Replace each with that environment's real recipient and
 # re-create the files with `sops -e`. tools/checks.py (sops-recipients) enforces file <-> recipient matching.

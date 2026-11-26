@@ -1,5 +1,8 @@
-# HAND-APPLIED app-of-apps for the qa cluster: crds (0) -> platform (1) -> services (2) -> gateway (3).
-# Waves on Applications wait for Application health (argocd/config/argocd-cm.yaml). Weights: see weights.yaml.
+# HAND-APPLIED app-of-apps for the qa cluster.
+# QA: MANUAL, and the children carry NO waves: syncing the root only creates/updates the child
+# Application objects, it never waits on (or syncs) a manual child. Sync the children in order:
+# crds -> platform -> secrets -> weights -> (transfer, bootstrap/) -> weights-verify -> services -> gateway.
+# UNVERIFIED on a live Argo CD: that a manual root with wave-less manual children never blocks.
 # Handover from CI apply (design section 7): disable this env's CI apply jobs, first sync with prune false, review the
 # diff, then enable sync. Remove stale Helm release Secrets deliberately (never `helm uninstall`).
 ---

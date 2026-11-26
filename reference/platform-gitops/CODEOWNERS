@@ -1,7 +1,8 @@
 # Who must approve what (GitLab CODEOWNERS syntax; enable "Require approval from code owners" on main).
 # Group names are EXAMPLES. One small team: the split is by risk, not by people.
 # Shared inputs change every environment's rendered output, so they need a PROD approver; the one-env-per-pr
-# gate makes that visible (multi-env label).
+# gate makes that visible (multi-env label). CODEOWNERS matches PATHS, not YAML blocks: a catalogue edit that only
+# touches a DEV block still needs a PROD approver. Deliberately strict; do not loosen it to /clusters/ alone.
 
 # Default: anyone on the platform team
 *                       @platform-team
